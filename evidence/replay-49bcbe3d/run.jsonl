@@ -1,0 +1,9 @@
+{"ts": "2026-09-05T17:42:09.423939+00:00", "run_id": "replay-49bcbe3d", "event": "run_started", "kind": "replay"}
+{"ts": "2026-09-05T17:42:09.424027+00:00", "run_id": "replay-49bcbe3d", "event": "replay_started", "cap_id": "read_savings_balance", "version": "1.0.0", "approval": "approved"}
+{"ts": "2026-09-05T17:42:09.428374+00:00", "run_id": "replay-49bcbe3d", "event": "act", "step": "login", "action": "fill", "value": "{{operator_user}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:09.429023+00:00", "run_id": "replay-49bcbe3d", "event": "act", "step": "login_pw", "action": "fill", "value": "{{operator_pass}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:09.433213+00:00", "run_id": "replay-49bcbe3d", "event": "act", "step": "login_submit", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:09.433824+00:00", "run_id": "replay-49bcbe3d", "event": "act", "step": "enter_id", "action": "fill", "value": "{{member_id}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:09.437684+00:00", "run_id": "replay-49bcbe3d", "event": "act", "step": "do_search", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:09.438020+00:00", "run_id": "replay-49bcbe3d", "event": "outcome_detected", "step": "do_search", "outcome": "member_not_found", "kind": "business"}
+{"ts": "2026-09-05T17:42:09.438056+00:00", "run_id": "replay-49bcbe3d", "event": "run_finished", "status": "business_outcome", "outcome": "member_not_found"}

@@ -1,0 +1,15 @@
+{"ts": "2026-09-05T18:31:41.480879+00:00", "run_id": "replay-dbe94eec", "event": "run_started", "kind": "replay"}
+{"ts": "2026-09-05T18:31:41.481110+00:00", "run_id": "replay-dbe94eec", "event": "replay_started", "cap_id": "open_subaccount", "version": "1.0.0", "approval": "approved"}
+{"ts": "2026-09-05T18:31:41.496363+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "login", "action": "fill", "value": "{{operator_user}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:41.498407+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "login_pw", "action": "fill", "value": "{{operator_pass}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:41.513114+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "login_submit", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T18:31:41.515124+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "enter_id", "action": "fill", "value": "{{member_id}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:41.526863+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "do_search", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T18:31:41.527677+00:00", "run_id": "replay-dbe94eec", "event": "outcome_detected", "step": "do_search", "outcome": "transient_unavailable", "kind": "recoverable"}
+{"ts": "2026-09-05T18:31:41.527755+00:00", "run_id": "replay-dbe94eec", "event": "recover_attempt", "outcome": "transient_unavailable", "kind": "retry", "attempt": 1}
+{"ts": "2026-09-05T18:31:41.534303+00:00", "run_id": "replay-dbe94eec", "event": "recover_ok", "outcome": "transient_unavailable", "attempt": 1}
+{"ts": "2026-09-05T18:31:41.539499+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "open_form", "action": "click", "value": null, "ok": true, "resolved_by": "link", "error": null}
+{"ts": "2026-09-05T18:31:41.541165+00:00", "run_id": "replay-dbe94eec", "event": "act", "step": "pick_type", "action": "select", "value": "{{account_type}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:41.541997+00:00", "run_id": "replay-dbe94eec", "event": "risky_blocked", "step": "submit_create"}
+{"ts": "2026-09-05T18:31:41.542034+00:00", "run_id": "replay-dbe94eec", "event": "replay_failure", "step": "submit_create", "reason": "risky/irreversible step requires confirmation (--confirm-risky) or human approval", "expected": ""}
+{"ts": "2026-09-05T18:31:41.542095+00:00", "run_id": "replay-dbe94eec", "event": "run_finished", "status": "failure", "step": "submit_create"}

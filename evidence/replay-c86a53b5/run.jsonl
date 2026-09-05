@@ -1,0 +1,15 @@
+{"ts": "2026-09-05T18:31:40.421211+00:00", "run_id": "replay-c86a53b5", "event": "run_started", "kind": "replay"}
+{"ts": "2026-09-05T18:31:40.421492+00:00", "run_id": "replay-c86a53b5", "event": "replay_started", "cap_id": "open_subaccount", "version": "1.0.0", "approval": "approved"}
+{"ts": "2026-09-05T18:31:40.434291+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "login", "action": "fill", "value": "{{operator_user}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:40.436333+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "login_pw", "action": "fill", "value": "{{operator_pass}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:40.450960+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "login_submit", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T18:31:40.452755+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "enter_id", "action": "fill", "value": "{{member_id}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:40.463904+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "do_search", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T18:31:40.465173+00:00", "run_id": "replay-c86a53b5", "event": "outcome_detected", "step": "do_search", "outcome": "transient_unavailable", "kind": "recoverable"}
+{"ts": "2026-09-05T18:31:40.465271+00:00", "run_id": "replay-c86a53b5", "event": "recover_attempt", "outcome": "transient_unavailable", "kind": "retry", "attempt": 1}
+{"ts": "2026-09-05T18:31:40.471755+00:00", "run_id": "replay-c86a53b5", "event": "recover_ok", "outcome": "transient_unavailable", "attempt": 1}
+{"ts": "2026-09-05T18:31:40.477111+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "open_form", "action": "click", "value": null, "ok": true, "resolved_by": "link", "error": null}
+{"ts": "2026-09-05T18:31:40.478696+00:00", "run_id": "replay-c86a53b5", "event": "act", "step": "pick_type", "action": "select", "value": "{{account_type}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T18:31:40.479573+00:00", "run_id": "replay-c86a53b5", "event": "risky_blocked", "step": "submit_create"}
+{"ts": "2026-09-05T18:31:40.479611+00:00", "run_id": "replay-c86a53b5", "event": "replay_failure", "step": "submit_create", "reason": "risky/irreversible step requires confirmation (--confirm-risky) or human approval", "expected": ""}
+{"ts": "2026-09-05T18:31:40.479673+00:00", "run_id": "replay-c86a53b5", "event": "run_finished", "status": "failure", "step": "submit_create"}

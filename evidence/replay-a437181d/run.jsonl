@@ -1,0 +1,12 @@
+{"ts": "2026-09-05T17:42:15.572292+00:00", "run_id": "replay-a437181d", "event": "run_started", "kind": "replay"}
+{"ts": "2026-09-05T17:42:15.572374+00:00", "run_id": "replay-a437181d", "event": "replay_started", "cap_id": "open_subaccount", "version": "1.0.0", "approval": "approved"}
+{"ts": "2026-09-05T17:42:15.576463+00:00", "run_id": "replay-a437181d", "event": "act", "step": "login", "action": "fill", "value": "{{operator_user}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:15.577098+00:00", "run_id": "replay-a437181d", "event": "act", "step": "login_pw", "action": "fill", "value": "{{operator_pass}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:15.581079+00:00", "run_id": "replay-a437181d", "event": "act", "step": "login_submit", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:15.581693+00:00", "run_id": "replay-a437181d", "event": "act", "step": "enter_id", "action": "fill", "value": "{{member_id}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:15.585553+00:00", "run_id": "replay-a437181d", "event": "act", "step": "do_search", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:15.587906+00:00", "run_id": "replay-a437181d", "event": "act", "step": "open_form", "action": "click", "value": null, "ok": true, "resolved_by": "link", "error": null}
+{"ts": "2026-09-05T17:42:15.588533+00:00", "run_id": "replay-a437181d", "event": "act", "step": "pick_type", "action": "select", "value": "{{account_type}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:15.591054+00:00", "run_id": "replay-a437181d", "event": "act", "step": "submit_create", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:15.591509+00:00", "run_id": "replay-a437181d", "event": "outcome_detected", "step": "submit_create", "outcome": "validation_error", "kind": "business"}
+{"ts": "2026-09-05T17:42:15.591543+00:00", "run_id": "replay-a437181d", "event": "run_finished", "status": "business_outcome", "outcome": "validation_error"}

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.egg-info/
+# evidence is redacted and intentionally committed for the deliverable;
+# uncomment to stop tracking new local runs:
+# evidence/
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.log

@@ -1,0 +1,14 @@
+{"ts": "2026-09-05T17:42:14.667674+00:00", "run_id": "replay-bfb15de9", "event": "run_started", "kind": "replay"}
+{"ts": "2026-09-05T17:42:14.667756+00:00", "run_id": "replay-bfb15de9", "event": "replay_started", "cap_id": "open_subaccount", "version": "1.0.0", "approval": "approved"}
+{"ts": "2026-09-05T17:42:14.671887+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "login", "action": "fill", "value": "{{operator_user}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:14.672518+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "login_pw", "action": "fill", "value": "{{operator_pass}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:14.676562+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "login_submit", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:14.677168+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "enter_id", "action": "fill", "value": "{{member_id}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:14.681164+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "do_search", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:14.683484+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "open_form", "action": "click", "value": null, "ok": true, "resolved_by": "link", "error": null}
+{"ts": "2026-09-05T17:42:14.684127+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "pick_type", "action": "select", "value": "{{account_type}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:14.686908+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "submit_create", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:14.687619+00:00", "run_id": "replay-bfb15de9", "event": "act", "step": "read_ref", "action": "extract", "value": null, "ok": true, "resolved_by": "row_value", "error": null}
+{"ts": "2026-09-05T17:42:14.687648+00:00", "run_id": "replay-bfb15de9", "event": "extract", "step": "read_ref", "output": "reference", "value": "[REDACTED]"}
+{"ts": "2026-09-05T17:42:14.688191+00:00", "run_id": "replay-bfb15de9", "event": "replay_success", "outputs": {"reference": "SA-12345-SAV"}}
+{"ts": "2026-09-05T17:42:14.688209+00:00", "run_id": "replay-bfb15de9", "event": "run_finished", "status": "success"}

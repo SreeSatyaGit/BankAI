@@ -1,0 +1,9 @@
+{"ts": "2026-09-05T17:42:10.323321+00:00", "run_id": "replay-645be21c", "event": "run_started", "kind": "replay"}
+{"ts": "2026-09-05T17:42:10.323411+00:00", "run_id": "replay-645be21c", "event": "replay_started", "cap_id": "read_savings_balance", "version": "1.0.0", "approval": "approved"}
+{"ts": "2026-09-05T17:42:10.327673+00:00", "run_id": "replay-645be21c", "event": "act", "step": "login", "action": "fill", "value": "{{operator_user}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:10.328339+00:00", "run_id": "replay-645be21c", "event": "act", "step": "login_pw", "action": "fill", "value": "{{operator_pass}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:10.332633+00:00", "run_id": "replay-645be21c", "event": "act", "step": "login_submit", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:10.333241+00:00", "run_id": "replay-645be21c", "event": "act", "step": "enter_id", "action": "fill", "value": "{{member_id}}", "ok": true, "resolved_by": "label", "error": null}
+{"ts": "2026-09-05T17:42:10.337110+00:00", "run_id": "replay-645be21c", "event": "act", "step": "do_search", "action": "click", "value": null, "ok": true, "resolved_by": "button", "error": null}
+{"ts": "2026-09-05T17:42:10.337400+00:00", "run_id": "replay-645be21c", "event": "outcome_detected", "step": "do_search", "outcome": "permission_denied", "kind": "business"}
+{"ts": "2026-09-05T17:42:10.337432+00:00", "run_id": "replay-645be21c", "event": "run_finished", "status": "business_outcome", "outcome": "permission_denied"}
