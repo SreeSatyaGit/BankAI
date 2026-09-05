@@ -196,7 +196,7 @@ def replay():
 @app.route("/api/runs")
 def list_runs():
     runs = []
-    for d in sorted(glob.glob(os.path.join(EVIDENCE, "*/")), reverse=True):
+    for d in glob.glob(os.path.join(EVIDENCE, "*/")):
         run_id = os.path.basename(d.rstrip("/"))
         evs = _events(run_id)
         if not evs:
@@ -207,6 +207,7 @@ def list_runs():
             "status": fin.get("status", "unknown"),
             "started": evs[0]["ts"],
         })
+    runs.sort(key=lambda r: r["started"], reverse=True)
     return jsonify(runs[:50])
 
 
