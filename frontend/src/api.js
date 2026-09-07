@@ -36,12 +36,27 @@ export function getRunStatus(runId) {
   return request(`/discover/${runId}`);
 }
 
-// Answers a pending risky-step confirmation for a run that is currently paused
-// (status === "awaiting_confirmation").
-export function confirmRiskyStep(runId, approve) {
-  return request(`/discover/${runId}/confirm`, {
+// Resolves a pending escalation (risky step / stuck / retry-exhausted) for a
+// run currently paused (status === "awaiting_intervention"). `decision` is
+// one of "approve" | "skip" | "continue" | "retry" | "abort" — which ones are
+// meaningful depends on the trigger, see the intervention panel in App.jsx.
+// (A planner whose API call itself fails is NOT an escalation — the run just
+// ends; there's nothing to resume here for that.)
+export function resumeRun(runId, decision, note) {
+  return request(`/discover/${runId}/resume`, {
     method: "POST",
-    body: JSON.stringify({ approve }),
+    body: JSON.stringify({ decision, note: note || null }),
+  });
+}
+
+// Lets a human act directly on the SAME live session a paused run is using —
+// click, type, navigate, extract — without resuming the agent yet. Can be
+// called any number of times while paused. `action` matches the backend's
+// Action schema: {type, locator?, value?, output_name?}.
+export function submitManualAction(runId, action, description) {
+  return request(`/discover/${runId}/manual-action`, {
+    method: "POST",
+    body: JSON.stringify({ action, description: description || null }),
   });
 }
 

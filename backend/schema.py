@@ -118,3 +118,61 @@ class Capability(BaseModel):
     steps: List[StepSpec] = Field(default_factory=list)
     success_checkpoint: Optional[str] = None
     created_at: str
+    # Optional, human-curated: {outcome_name: substring_to_match}. Checked
+    # against the page (title + url + digest) after every replayed step —
+    # if a pattern matches, replay stops and reports that named business
+    # outcome instead of blindly treating it as success or failure. Empty by
+    # default; discovery doesn't populate this automatically (see replay.py
+    # and REPORT.md's Cuts section) — it's something a reviewer adds after
+    # inspecting a saved artifact, e.g. {"member_not_found": "No member found"}.
+    known_outcomes: Dict[str, str] = Field(default_factory=dict)
+
+
+class ReplayStepResult(BaseModel):
+    """Outcome of executing one StepSpec during replay."""
+
+    step_id: str
+    description: str
+    action_type: ActionType
+    ok: bool
+    attempts: int  # 1 if it succeeded first try; up to MAX_ATTEMPTS if retried
+    error: Optional[str] = None
+    screenshot: Optional[str] = None
+    duration_ms: int
+
+
+ReplayStatus = Literal["success", "business_outcome", "blocked", "failed"]
+
+
+class ReplayResult(BaseModel):
+    """
+    Structured result of a replay run — the contract the calling agent (or a
+    human) reads to know what happened. Deliberately separates:
+      - "success": every step executed, no known business outcome matched
+      - "business_outcome": a Capability.known_outcomes pattern matched partway
+        through — a legitimate answer, not a crash (e.g. "no such member")
+      - "blocked": stopped before executing a risky step because the caller
+        didn't pass confirm_risky=true
+      - "failed": a step exhausted its retries/fallbacks — a hard failure
+    """
+
+    status: ReplayStatus
+    outcome_name: Optional[str] = None  # populated when status == "business_outcome"
+    artifact_id: str
+    run_id: str
+    steps: List[ReplayStepResult] = Field(default_factory=list)
+    outputs: Dict[str, str] = Field(default_factory=dict)
+    # Every param actually used to run this replay — caller-supplied values
+    # plus any that were auto-generated to fill a gap (see defaults.py).
+    # Transparent by design: nothing here is a silent substitution.
+    used_params: Dict[str, str] = Field(default_factory=dict)
+    # Which of the names in used_params were fabricated rather than supplied.
+    auto_filled_params: List[str] = Field(default_factory=list)
+    # Best-effort keyword-overlap check of success_checkpoint against the final
+    # page. None if there was no checkpoint to check (or replay didn't reach
+    # the end). NOT proof of correctness — see replay.py's docstring.
+    checkpoint_verified: Optional[bool] = None
+    error: Optional[str] = None  # top-level detail when status == "failed" or "blocked"
+    duration_ms: int
+    started_at: str
+    finished_at: str

@@ -23,7 +23,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from groq import Groq
+from groq import BadRequestError, Groq
 
 from .schema import Action, Perception, StepSpec
 
@@ -251,12 +251,62 @@ class PlannerStuck:
 
 
 @dataclass
+class PlannerError:
+    """The Groq API call itself failed (network/timeout/rate-limit/etc),
+    twice in a row — as opposed to PlannerStuck, where the call succeeded but
+    the model gave up or returned unparseable output. Kept distinct so this
+    surfaces to the human as an honest "the planner call is failing" escalation
+    rather than "the agent is stuck on the page", which would wrongly invite
+    them to go fix something via the live session.
+
+    NOTE: a Groq HTTP 400 with code "output_parse_failed" (the model rambled
+    instead of emitting a tool call) is deliberately NOT a PlannerError — it's
+    a malformed-output case that a human often CAN clear on the live session
+    (e.g. a Cloudflare interstitial), so it retries with a correction and then
+    becomes PlannerStuck. See _PlannerOutputUnparseable."""
+
+    reason: str
+
+
+@dataclass
 class PlannerDone:
     reason: str
     final_checkpoint: Optional[str]
 
 
-PlannerOutcome = Any  # StepSpec | PlannerDone | PlannerStuck
+PlannerOutcome = Any  # StepSpec | PlannerDone | PlannerStuck | PlannerError
+
+
+class _PlannerCallFailed(Exception):
+    """Internal signal that chat.completions.create() itself raised, so
+    _call_with_one_retry can tell that apart from the model responding with
+    unparseable/invalid tool-call output."""
+
+
+class _PlannerOutputUnparseable(_PlannerCallFailed):
+    """Groq answered with HTTP 400 `output_parse_failed` — the request was fine,
+    but the model's generation could not be turned into a tool call server-side.
+    Seen when gpt-oss emits a long analysis blob and never commits to a call,
+    often provoked by a confusing page state (a Cloudflare "Just a moment..."
+    interstitial, an unexpected error page). This is a MALFORMED-OUTPUT problem,
+    not a transport one, so it's routed to the corrective retry + PlannerStuck
+    (a human CAN clear a Cloudflare wall on the live session) rather than to
+    PlannerError (terminal, unescalated). Subclasses _PlannerCallFailed so any
+    site that only knows the base type still degrades safely."""
+
+
+def _is_output_parse_failure(exc: BadRequestError) -> bool:
+    """True if this 400 is Groq's `output_parse_failed` (model generation
+    couldn't be parsed into a tool call) rather than a genuine bad request.
+    Checked a few ways because the SDK surfaces the error code inconsistently."""
+    if getattr(exc, "code", None) == "output_parse_failed":
+        return True
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("code") == "output_parse_failed":
+            return True
+    return "output_parse_failed" in str(exc)
 
 
 class GroqPlanner:
@@ -297,25 +347,69 @@ class GroqPlanner:
         return self._call_with_one_retry(messages)
 
     def _call_with_one_retry(self, messages: List[Dict[str, Any]]) -> PlannerOutcome:
-        outcome = self._call_once(messages)
+        try:
+            outcome = self._call_once(messages)
+        except _PlannerOutputUnparseable:
+            # Groq couldn't parse the model's generation into a tool call. Same
+            # remedy as a locally-unparseable response: retry with a correction,
+            # and escalate to a human (PlannerStuck) if it still won't parse.
+            return self._retry_after_malformed_output(
+                messages,
+                cause=(
+                    "the model replied with reasoning text instead of a tool call "
+                    "(Groq output_parse_failed) — often caused by a blocking page "
+                    "state such as a Cloudflare check"
+                ),
+            )
+        except _PlannerCallFailed as exc:
+            return self._retry_after_api_failure(messages, exc)
         if outcome is not None:
             return outcome
+        return self._retry_after_malformed_output(messages)
+
+    def _retry_after_api_failure(
+        self, messages: List[Dict[str, Any]], first_exc: "_PlannerCallFailed"
+    ) -> PlannerOutcome:
+        """The API call itself raised — retry once as-is (nothing to correct
+        in the prompt, unlike malformed output) before giving up."""
+        try:
+            outcome = self._call_once(messages)
+        except _PlannerCallFailed as exc:
+            return PlannerError(reason=f"planner API call failed twice in a row: {exc}")
+        if outcome is not None:
+            return outcome
+        return PlannerStuck(reason="planner returned malformed output after an API retry")
+
+    def _retry_after_malformed_output(
+        self, messages: List[Dict[str, Any]], cause: Optional[str] = None
+    ) -> PlannerOutcome:
         # Malformed output — retry exactly once, telling the model what went wrong.
         messages = messages + [
             {
                 "role": "user",
                 "content": (
                     "Your previous response could not be parsed into a valid tool call. "
+                    "Do NOT reply with analysis, reasoning, or prose — respond with "
+                    "exactly one function call to `next_step` or `finish` and nothing else. "
                     "A common mistake: the `locator` object must have exactly the keys "
                     "'strategy' and 'value' (e.g. {\"strategy\": \"label\", \"value\": \"First name\"}) "
                     "— not '{\"label\": \"...\"}' or any other shape. "
-                    "Call exactly one of `next_step` or `finish` with valid arguments."
+                    "If the page is blocked (e.g. a Cloudflare / 'Just a moment...' "
+                    "interstitial) and you cannot make progress, call `finish` with "
+                    "status=\"stuck\"."
                 ),
             }
         ]
-        outcome = self._call_once(messages)
+        try:
+            outcome = self._call_once(messages)
+        except _PlannerOutputUnparseable:
+            outcome = None  # still unparseable — fall through to the PlannerStuck return
+        except _PlannerCallFailed as exc:
+            return PlannerError(reason=f"planner API call failed while retrying malformed output: {exc}")
         if outcome is not None:
             return outcome
+        if cause:
+            return PlannerStuck(reason=f"planner returned unparseable output twice in a row: {cause}")
         return PlannerStuck(reason="planner returned malformed output twice in a row")
 
     def _call_once(self, messages: List[Dict[str, Any]]) -> Optional[PlannerOutcome]:
@@ -327,9 +421,18 @@ class GroqPlanner:
                 tool_choice="required",
                 temperature=0.2,
             )
-        except Exception as exc:  # noqa: BLE001 — treat any API failure as "malformed" for retry purposes
+        except BadRequestError as exc:
+            if _is_output_parse_failure(exc):
+                print(
+                    "[planner] Groq output_parse_failed — model did not emit a "
+                    "parseable tool call; treating as malformed output"
+                )
+                raise _PlannerOutputUnparseable(str(exc)) from exc
             print(f"[planner] Groq API call failed: {exc}")
-            return None
+            raise _PlannerCallFailed(str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 — a real API/network failure, distinct from malformed output
+            print(f"[planner] Groq API call failed: {exc}")
+            raise _PlannerCallFailed(str(exc)) from exc
 
         choice = response.choices[0]
         tool_calls = choice.message.tool_calls or []

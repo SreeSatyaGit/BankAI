@@ -1,20 +1,31 @@
 """
 FastAPI app. Thin — the real logic lives in loop.py / surface.py / planner.py /
-runs.py.
+runs.py / replay.py.
 
 POST /api/discover starts a run in the background and returns immediately with a
-run_id: discovery can no longer be a single blocking request, because a risky
-step needs to be able to pause mid-run and wait on a human's answer, which could
-take an arbitrary amount of time. The frontend polls GET /api/discover/{run_id}
-for progress and, when status=="awaiting_confirmation", shows the pending step
-and answers via POST /api/discover/{run_id}/confirm.
+run_id: discovery can no longer be a single blocking request, because escalating
+to a human (a risky step, the planner getting stuck, or a step exhausting its
+retries) could pause for an arbitrary amount of time. (The planner API call
+itself failing — as opposed to the planner giving up — is NOT escalated to a
+human; see loop.py's docstring — that just ends the run.) The frontend polls
+GET /api/discover/{run_id} for progress and, when status=="awaiting_intervention",
+shows the pending situation and either:
+  - resolves it directly via POST /api/discover/{run_id}/resume, or
+  - first takes one or more manual actions on the SAME live session via
+    POST /api/discover/{run_id}/manual-action, then resumes.
+
+POST /api/replay is a single blocking call (unlike discover) — replay has no
+LLM in the loop, so a run either completes or hard-fails in bounded time; there
+is no open-ended "waiting on the model" step that would justify the
+background-task treatment discover needed. Replay also has no live-pause
+capability for the same reason it's a blocking call — see replay.py's docstring.
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +33,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import runs, store
+from .evidence import capture_screenshot
 from .loop import run_discovery
+from .replay import replay_capability
+from .schema import Action, Capability, ReplayResult
 
 app = FastAPI(title="BankAI", version="0.1.0")
 
@@ -57,22 +71,47 @@ class DiscoverStartResponse(BaseModel):
 
 class RunStatusResponse(BaseModel):
     run_id: str
-    status: str  # "running" | "awaiting_confirmation" | "done"
+    status: str  # "running" | "awaiting_intervention" | "done"
     steps: List[Dict[str, Any]]
-    pending_step: Optional[Dict[str, Any]] = None
+    pending_intervention: Optional[Dict[str, Any]] = None
     # Only populated once status == "done":
     ok: Optional[bool] = None
     artifact: Optional[Dict[str, Any]] = None
     reason: Optional[str] = None
 
 
-class ConfirmRequest(BaseModel):
-    approve: bool
+class ResumeRequest(BaseModel):
+    # "approve"/"skip" are the meaningful choices for a "risky" trigger;
+    # "retry"/"skip" for "retry_exhausted"; "continue"/"abort" for "stuck".
+    # loop.py interprets whichever it receives sensibly for the trigger that's
+    # actually pending — see its docstring. (There's no "planner_error"
+    # trigger to resolve here — that ends the run automatically, no human
+    # prompt: an API failure isn't something a human can fix on the page.)
+    decision: Literal["approve", "skip", "continue", "retry", "abort"]
+    note: Optional[str] = None
+
+
+class ManualActionRequest(BaseModel):
+    # Reuses the exact same Action schema the planner uses — a human manually
+    # acting on a paused live session is just submitting one more Action, not
+    # a fundamentally different kind of operation.
+    action: Action
+    description: Optional[str] = None
+
+
+class ManualActionResponse(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+    extracted_text: Optional[str] = None
+    screenshot: Optional[str] = None
 
 
 class ReplayRequest(BaseModel):
-    artifact_id: str
+    artifact_id: Optional[str] = None
+    capability: Optional[Dict[str, Any]] = None
     params: Dict[str, str] = {}
+    confirm_risky: bool = False
+    auto_fill_missing_params: bool = True
 
 
 @app.get("/api/health")
@@ -81,13 +120,18 @@ async def health() -> Dict[str, bool]:
 
 
 async def _execute_run(run: runs.RunState, target_url: str, goal: str) -> None:
+    def _on_surface_ready(surface, run_dir) -> None:
+        run.live_surface = surface
+        run.live_run_dir = run_dir
+
     try:
         result = await run_discovery(
             target_url=target_url,
             goal=goal,
             run_id=run.run_id,
             events=run.events,
-            confirm_risky=run.request_confirmation,
+            request_intervention=run.request_intervention,
+            on_surface_ready=_on_surface_ready,
         )
         run.result = result
     except Exception as exc:  # noqa: BLE001 — never leave a run stuck "running" forever
@@ -100,6 +144,8 @@ async def _execute_run(run: runs.RunState, target_url: str, goal: str) -> None:
         }
     finally:
         run.status = "done"
+        run.live_surface = None
+        run.live_run_dir = None
 
 
 @app.post("/api/discover", response_model=DiscoverStartResponse)
@@ -125,7 +171,7 @@ async def discover_status(run_id: str) -> RunStatusResponse:
         "run_id": run.run_id,
         "status": run.status,
         "steps": run.events,
-        "pending_step": run.pending_step,
+        "pending_intervention": run.pending_intervention,
     }
     if run.status == "done" and run.result:
         payload["ok"] = run.result.get("ok")
@@ -134,21 +180,60 @@ async def discover_status(run_id: str) -> RunStatusResponse:
     return RunStatusResponse(**payload)
 
 
-@app.post("/api/discover/{run_id}/confirm")
-async def confirm_step(run_id: str, req: ConfirmRequest) -> Dict[str, bool]:
-    """Answers a pending risky-step confirmation. 409 if this run isn't
-    actually paused waiting on one — most likely you already answered it, or
-    the run moved on/finished on its own (e.g. max-steps) in the meantime."""
+@app.post("/api/discover/{run_id}/resume")
+async def resume(run_id: str, req: ResumeRequest) -> Dict[str, bool]:
+    """Resolves a pending escalation (risky step / stuck / retry-exhausted).
+    409 if this run isn't actually paused — most likely you already answered
+    it, or it moved on/finished on its own in the meantime."""
     run = runs.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
-    if run.status != "awaiting_confirmation":
+    if run.status != "awaiting_intervention":
         raise HTTPException(
             status_code=409,
-            detail=f"run {run_id} has no pending confirmation (status={run.status})",
+            detail=f"run {run_id} has no pending intervention (status={run.status})",
         )
-    run.resolve_confirmation(req.approve)
+    run.resolve_intervention({"decision": req.decision, "note": req.note})
     return {"ok": True}
+
+
+@app.post("/api/discover/{run_id}/manual-action", response_model=ManualActionResponse)
+async def manual_action(run_id: str, req: ManualActionRequest) -> ManualActionResponse:
+    """Lets a human act directly on the SAME live Playwright session a paused
+    run is using — click, type, navigate, extract — without resuming the
+    agent yet. This is the actual "take control of the live session" part of
+    the handoff; `resume` is just how you hand control back afterward. Can be
+    called any number of times while paused (e.g. dismiss a popup, then check
+    the page again, then decide what to tell `resume`)."""
+    run = runs.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
+    if run.status != "awaiting_intervention" or run.live_surface is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"run {run_id} is not currently paused for a human to act on (status={run.status})",
+        )
+
+    result = await run.live_surface.act(req.action)
+
+    screenshot = None
+    if run.live_run_dir is not None:
+        manual_count = sum(1 for e in run.events if e.get("type") == "manual_action") + 1
+        screenshot = await capture_screenshot(run.live_surface.page, run.live_run_dir, f"human_{manual_count}")
+
+    run.events.append(
+        {
+            "type": "manual_action",
+            "actor": "human",
+            "description": req.description or f"Manual {req.action.type} by human",
+            "action_type": req.action.type,
+            "ok": result.ok,
+            "error": result.error,
+            "screenshot": screenshot,
+        }
+    )
+
+    return ManualActionResponse(ok=result.ok, error=result.error, extracted_text=result.extracted_text, screenshot=screenshot)
 
 
 @app.get("/api/artifacts")
@@ -156,21 +241,33 @@ async def list_artifacts() -> Dict[str, List[str]]:
     return {"artifact_ids": store.list_ids()}
 
 
-@app.post("/api/replay")
-async def replay(req: ReplayRequest) -> None:
+@app.post("/api/replay", response_model=ReplayResult)
+async def replay(req: ReplayRequest) -> ReplayResult:
     """
-    STUB — replay is the next milestone, intentionally not implemented here.
+    Deterministic replay: executes a saved Capability's steps directly via
+    Surface.act(), with NO LLM in the loop. See replay.py for the full design
+    (retry + locator-fallback robustness, business-outcome/checkpoint
+    classification, and the risky-step confirm_risky gate).
+    """
+    if not req.artifact_id and not req.capability:
+        raise HTTPException(status_code=400, detail="either artifact_id or capability must be provided")
 
-    This skeleton only builds the discovery path: goal -> LLM-driven live run ->
-    persisted Capability artifact. Deterministic replay (loading a Capability,
-    substituting req.params into each step's {{name}} placeholders, driving the
-    Surface WITHOUT the planner in the loop, verifying success_checkpoint, and
-    returning a structured result that distinguishes success / known business
-    outcome / hard failure) is real work that deserves its own pass rather than a
-    faked response here. See REPORT.md's "Determinism & error handling" section
-    for the intended design once it's built.
-    """
-    raise HTTPException(
-        status_code=501,
-        detail="replay is not implemented yet — this is the next milestone, see comment in main.py",
+    if req.capability is not None:
+        try:
+            capability = Capability.model_validate(req.capability)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"invalid capability payload: {exc}")
+    else:
+        try:
+            capability = store.load(req.artifact_id)  # type: ignore[arg-type]
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"unknown artifact_id: {req.artifact_id}")
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"could not load artifact {req.artifact_id}: {exc}")
+
+    return await replay_capability(
+        capability=capability,
+        params=req.params,
+        confirm_risky=req.confirm_risky,
+        auto_fill_missing_params=req.auto_fill_missing_params,
     )

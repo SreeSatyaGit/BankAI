@@ -142,10 +142,19 @@ class ActionResult:
 
 
 class Surface:
-    """Wraps a live Playwright page. Only perceive()/act() are used by the loop."""
+    """Wraps a live Playwright page. Only perceive()/act() are used by the
+    normal discovery/replay loops — the `page` property below is an
+    intentional, narrow exception for cross-cutting concerns that live
+    outside the perceive()/act() contract, like screenshot capture (see
+    evidence.py) and a human manually acting on a paused live session (see
+    main.py's manual-action endpoint)."""
 
     def __init__(self, page: Page):
         self._page = page
+
+    @property
+    def page(self) -> Page:
+        return self._page
 
     async def perceive(self) -> Perception:
         try:
@@ -168,6 +177,9 @@ class Surface:
                 loc = await self._resolve(action.locator)
                 if loc is None:
                     return ActionResult(False, error=f"could not resolve locator {action.locator}")
+                readiness_error = await self._ensure_ready(loc)
+                if readiness_error:
+                    return ActionResult(False, error=readiness_error)
                 await loc.click(timeout=DEFAULT_TIMEOUT_MS)
                 return ActionResult(True)
 
@@ -175,6 +187,9 @@ class Surface:
                 loc = await self._resolve(action.locator)
                 if loc is None:
                     return ActionResult(False, error=f"could not resolve locator {action.locator}")
+                readiness_error = await self._ensure_ready(loc)
+                if readiness_error:
+                    return ActionResult(False, error=readiness_error)
                 await loc.fill(action.value or "", timeout=DEFAULT_TIMEOUT_MS)
                 return ActionResult(True)
 
@@ -182,6 +197,9 @@ class Surface:
                 loc = await self._resolve(action.locator)
                 if loc is None:
                     return ActionResult(False, error=f"could not resolve locator {action.locator}")
+                readiness_error = await self._ensure_ready(loc)
+                if readiness_error:
+                    return ActionResult(False, error=readiness_error)
                 await loc.select_option(label=action.value, timeout=DEFAULT_TIMEOUT_MS)
                 return ActionResult(True)
 
@@ -189,6 +207,9 @@ class Surface:
                 loc = await self._resolve(action.locator)
                 if loc is None:
                     return ActionResult(False, error=f"could not resolve locator {action.locator}")
+                readiness_error = await self._ensure_ready(loc)
+                if readiness_error:
+                    return ActionResult(False, error=readiness_error)
                 await loc.press("Enter", timeout=DEFAULT_TIMEOUT_MS)
                 return ActionResult(True)
 
@@ -196,6 +217,9 @@ class Surface:
                 loc = await self._resolve(action.locator)
                 if loc is None:
                     return ActionResult(False, error=f"could not resolve locator {action.locator}")
+                readiness_error = await self._ensure_ready(loc)
+                if readiness_error:
+                    return ActionResult(False, error=readiness_error)
                 text = await loc.inner_text(timeout=DEFAULT_TIMEOUT_MS)
                 return ActionResult(True, extracted_text=text.strip())
 
@@ -205,6 +229,20 @@ class Surface:
             return ActionResult(False, error=f"timeout: {exc}")
         except Exception as exc:  # noqa: BLE001 — surface every failure to the caller
             return ActionResult(False, error=f"{type(exc).__name__}: {exc}")
+
+    async def _ensure_ready(self, loc: PWLocator) -> Optional[str]:
+        """Explicit visibility wait before acting, so a timeout here produces a
+        clearly distinguishable error ("resolved but never became visible")
+        from a timeout inside the click/fill/etc itself (found, visible, but
+        e.g. the click was intercepted by an overlay). Playwright's own
+        click()/fill()/etc already auto-wait for actionability internally —
+        this exists for error-message clarity during replay/debugging, not to
+        change functional behavior."""
+        try:
+            await loc.wait_for(state="visible", timeout=DEFAULT_TIMEOUT_MS)
+            return None
+        except PWTimeoutError:
+            return "element resolved but never became visible in time"
 
     async def _resolve(self, locator: Optional[Locator]) -> Optional[PWLocator]:
         """Resolve a semantic Locator to a Playwright locator, walking fallbacks
