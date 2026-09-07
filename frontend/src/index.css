@@ -1,40 +1,53 @@
 /* ---------------------------------------------------------------------
    Bridge — a supervisor console for the CoreServ agent.
 
+   Styled as a Bank of America operator screen: a light workstation UI
+   on a pale gray ground, a navy command bar across the top, and the
+   brand red reserved for the primary action and hard failures.
+
    Token system:
-     color   deep ink background, hairline panel dividers (no card shadows).
-             three functional status colors only: teal (success), blue
-             (business outcome — informational, not a failure), rose
-             (failure). Amber is the one accent color, doing double duty
-             for "needs attention" / risky / escalation, since human
-             handoff is the whole point of this tool.
-     type    IBM Plex Sans for UI chrome; IBM Plex Mono for anything that
-             is genuinely data — run ids, timestamps, the event stream,
-             the artifact JSON. Not decorative monospace-for-labels.
-     layout  a control room: case picker / live session / artifact+history,
-             flat panels with 1px hairlines, minimal radius reserved for
-             interactive controls (buttons, inputs, status lamps).
+     color   white panels on a #f2f4f7 ground, hairline dividers, no
+             heavy shadows. Brand navy (#012169) for the top bar and
+             headings, brand red (#e11b30) for the primary button and
+             failure state. Three functional status colors: green
+             (success), blue (business outcome — informational, not a
+             failure), red (failure). Amber is the one accent color,
+             doing double duty for "needs attention" / risky /
+             escalation, since human handoff is the whole point.
+     type    IBM Plex Sans for UI chrome; IBM Plex Mono for anything
+             that is genuinely data — run ids, timestamps, the event
+             stream, the artifact JSON.
+     layout  a control room: case picker / live session / artifact +
+             history, flat panels with 1px hairlines, minimal radius
+             reserved for interactive controls.
    --------------------------------------------------------------------- */
 
 :root {
-  --bg: #0c131a;
-  --panel: #121b23;
-  --panel-raised: #17212a;
-  --line: #253440;
-  --line-soft: #1c2933;
+  --bg: #f2f4f7;
+  --panel: #ffffff;
+  --panel-raised: #f4f6f9;
+  --line: #d3dae1;
+  --line-soft: #e6eaee;
 
-  --text: #e7edf1;
-  --text-dim: #8fa3b0;
-  --text-faint: #56707e;
+  --navy: #012169;
+  --navy-deep: #001a54;
+  --red: #e11b30;
+  --red-deep: #b81326;
 
-  --amber: #e8a33d;
-  --amber-dim: rgba(232, 163, 61, 0.14);
-  --teal: #45b8a6;
-  --teal-dim: rgba(69, 184, 166, 0.14);
-  --blue: #5c8def;
-  --blue-dim: rgba(92, 141, 239, 0.14);
-  --rose: #e2687a;
-  --rose-dim: rgba(226, 104, 122, 0.14);
+  --text: #1c2733;
+  --text-dim: #566575;
+  --text-faint: #8593a1;
+  --on-navy: #eef2f7;
+  --on-navy-dim: #a9b8cf;
+
+  --amber: #a76a00;
+  --amber-dim: rgba(167, 106, 0, 0.12);
+  --teal: #12805c;
+  --teal-dim: rgba(18, 128, 92, 0.12);
+  --blue: #1358c4;
+  --blue-dim: rgba(19, 88, 196, 0.12);
+  --rose: #c8102e;
+  --rose-dim: rgba(200, 16, 46, 0.10);
 
   --radius-sm: 3px;
   --radius-md: 5px;
@@ -42,7 +55,7 @@
   --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -66,7 +79,7 @@ body {
 }
 
 ::selection {
-  background: var(--amber-dim);
+  background: rgba(19, 88, 196, 0.18);
   color: var(--text);
 }
 
@@ -92,8 +105,9 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  border-bottom: 3px solid var(--red);
+  background: var(--navy);
+  color: var(--on-navy);
   flex-shrink: 0;
 }
 
@@ -107,8 +121,8 @@ button {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--amber);
-  box-shadow: 0 0 8px 1px rgba(232, 163, 61, 0.55);
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(225, 27, 48, 0.25);
   flex-shrink: 0;
   position: relative;
   top: -1px;
@@ -118,11 +132,12 @@ button {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: #ffffff;
 }
 
 .brand-sub {
   font-size: 13px;
-  color: var(--text-faint);
+  color: var(--on-navy-dim);
 }
 
 .conn {
@@ -130,7 +145,7 @@ button {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--text-dim);
+  color: var(--on-navy);
 }
 
 /* --------------------------------------------------------------- layout */
@@ -138,7 +153,7 @@ button {
 .layout {
   flex: 1;
   display: grid;
-  grid-template-columns: 300px 1fr 340px;
+  grid-template-columns: 300px 1fr;
   min-height: 0;
 }
 
@@ -147,14 +162,11 @@ button {
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  background: var(--panel);
 }
 
 .rail-left {
   border-right: 1px solid var(--line);
-}
-
-.rail-right {
-  border-left: 1px solid var(--line);
 }
 
 .center {
@@ -168,8 +180,7 @@ button {
   .layout {
     grid-template-columns: 1fr;
   }
-  .rail-left,
-  .rail-right {
+  .rail-left {
     border: none;
     border-bottom: 1px solid var(--line);
   }
@@ -188,8 +199,10 @@ button {
 
 .panel-title {
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-dim);
+  font-weight: 700;
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   margin: 0 0 12px;
 }
 
@@ -222,7 +235,7 @@ button {
 .seg button {
   flex: 1;
   padding: 8px 10px;
-  background: transparent;
+  background: var(--panel);
   border: none;
   color: var(--text-dim);
   font-size: 13px;
@@ -240,8 +253,8 @@ button {
 }
 
 .seg button.active {
-  background: var(--amber-dim);
-  color: var(--amber);
+  background: var(--navy);
+  color: #ffffff;
 }
 
 .case-list {
@@ -269,8 +282,8 @@ button {
 }
 
 .case-row.selected {
-  background: var(--panel-raised);
-  border-left-color: var(--amber);
+  background: var(--blue-dim);
+  border-left-color: var(--navy);
 }
 
 .case-id {
@@ -282,7 +295,7 @@ button {
 }
 
 .case-row.selected .case-id {
-  color: var(--amber);
+  color: var(--navy);
 }
 
 .case-body {
@@ -314,7 +327,7 @@ button {
 
 .option-row input[type="checkbox"] {
   margin-top: 3px;
-  accent-color: var(--amber);
+  accent-color: var(--navy);
   width: 14px;
   height: 14px;
   flex-shrink: 0;
@@ -333,7 +346,7 @@ button {
 .text-input {
   width: 100%;
   padding: 8px 10px;
-  background: var(--panel-raised);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   color: var(--text);
@@ -343,6 +356,7 @@ button {
 
 .text-input:disabled {
   color: var(--text-faint);
+  background: var(--panel-raised);
 }
 
 /* ------------------------------------------------------------- buttons */
@@ -355,7 +369,7 @@ button {
   padding: 9px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: var(--panel-raised);
+  background: var(--panel);
   color: var(--text);
   font-size: 13px;
   font-weight: 500;
@@ -365,7 +379,8 @@ button {
 }
 
 .btn:hover:not(:disabled) {
-  background: #1d2933;
+  background: var(--panel-raised);
+  border-color: #c0c8d0;
 }
 
 .btn:disabled {
@@ -374,14 +389,15 @@ button {
 }
 
 .btn-primary {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: #201304;
+  background: var(--red);
+  border-color: var(--red);
+  color: #ffffff;
   font-weight: 600;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #f0ae4c;
+  background: var(--red-deep);
+  border-color: var(--red-deep);
 }
 
 .btn-row {
@@ -401,13 +417,14 @@ button {
 .btn-ghost:hover:not(:disabled) {
   color: var(--rose);
   background: transparent;
+  border-color: transparent;
 }
 
 .spinner {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: currentColor;
   animation: spin 0.7s linear infinite;
 }
@@ -430,7 +447,7 @@ button {
 }
 
 .lamp.on {
-  box-shadow: 0 0 7px 1px var(--lamp-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lamp-color) 22%, transparent);
 }
 
 .lamp-idle {
@@ -598,7 +615,7 @@ button {
 .timeline {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #0a1015;
+  background: var(--panel);
   font-family: var(--font-mono);
   font-size: 12px;
   overflow: hidden;
@@ -612,6 +629,10 @@ button {
   align-items: baseline;
 }
 
+.tl-row:nth-child(even) {
+  background: var(--panel-raised);
+}
+
 .tl-row:last-child {
   border-bottom: none;
 }
@@ -619,7 +640,19 @@ button {
 .tl-ts {
   color: var(--text-faint);
   flex-shrink: 0;
-  width: 68px;
+  width: 84px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.tl-ts-date {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.tl-ts-time {
+  color: var(--text-dim);
 }
 
 .tl-lamp {
@@ -713,7 +746,7 @@ button {
 
 .chip.sensitive {
   color: var(--amber);
-  border-color: rgba(232, 163, 61, 0.35);
+  border-color: rgba(167, 106, 0, 0.4);
 }
 
 .steps-list {
@@ -773,7 +806,7 @@ button {
 }
 
 .history-row:hover .history-id {
-  color: var(--text);
+  color: var(--navy);
 }
 
 .history-id {
@@ -794,7 +827,7 @@ button {
 
 .json-toggle {
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--navy);
   background: none;
   border: none;
   cursor: pointer;
@@ -807,7 +840,7 @@ button {
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--text-dim);
-  background: #0a1015;
+  background: var(--panel-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 12px;
@@ -822,7 +855,7 @@ button {
   font-size: 12.5px;
   color: var(--rose);
   padding: 10px 12px;
-  border: 1px solid rgba(226, 104, 122, 0.35);
+  border: 1px solid rgba(200, 16, 46, 0.35);
   background: var(--rose-dim);
   border-radius: var(--radius-sm);
   margin-bottom: 14px;
