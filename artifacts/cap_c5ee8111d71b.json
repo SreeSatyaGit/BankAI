@@ -1,0 +1,311 @@
+{
+  "id": "cap_c5ee8111d71b",
+  "version": 1,
+  "goal": "Go ahead an create an account in parabank",
+  "target_url": "https://parabank.parasoft.com/parabank/register.htm",
+  "params": [
+    "city",
+    "first_name",
+    "last_name",
+    "password",
+    "phone_number",
+    "ssn",
+    "state",
+    "street",
+    "username",
+    "zip_code"
+  ],
+  "outputs": [],
+  "steps": [
+    {
+      "id": "step_1",
+      "description": "Fill registration form and submit",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.firstName",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{first_name}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "first name field shows John",
+      "risky": false
+    },
+    {
+      "id": "step_2",
+      "description": "Enter last name",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.lastName",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{last_name}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "last name field shows Doe",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter username",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.username",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{username}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "username field shows john.doe123",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter password",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "password",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{password}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "password field shows Password123!",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter street address",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.address.street",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{street}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "street field shows 123 Main St",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter city",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.address.city",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{city}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "city field shows Springfield",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter state",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.address.state",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{state}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "state field shows IL",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter zip code",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.address.zipCode",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{zip_code}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "zip code field shows 62704",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter phone number",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.phoneNumber",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{phone_number}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "phone number field shows 555-1234",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter SSN",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.ssn",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{ssn}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "SSN field shows 123-45-6789",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter password into customer.password field",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "customer.password",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{password}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "customer.password field shows Password123!",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Enter password confirmation",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "repeatedPassword",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{password}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "repeatedPassword field shows Password123!",
+      "risky": false
+    },
+    {
+      "id": "step_1",
+      "description": "Click Register button to submit form",
+      "action": {
+        "type": "click",
+        "locator": {
+          "strategy": "name",
+          "value": "Register",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": null,
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "registration submitted",
+      "risky": true
+    },
+    {
+      "id": "step_1",
+      "description": "Click Register button to submit the form",
+      "action": {
+        "type": "click",
+        "locator": {
+          "strategy": "name",
+          "value": "Register",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": null,
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "registration confirmation page appears",
+      "risky": true
+    },
+    {
+      "id": "step_1",
+      "description": "Click Register button to submit form",
+      "action": {
+        "type": "click",
+        "locator": {
+          "strategy": "name",
+          "value": "Register",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": null,
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "registration submitted",
+      "risky": true
+    },
+    {
+      "id": "step_1",
+      "description": "Click Register button to submit the form",
+      "action": {
+        "type": "click",
+        "locator": {
+          "strategy": "role",
+          "value": "Register",
+          "role": "button",
+          "fallbacks": []
+        },
+        "value": null,
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "registration page shows success message",
+      "risky": true
+    }
+  ],
+  "success_checkpoint": "Account creation page shows success message and user is logged in",
+  "created_at": "2026-09-07T04:06:01.050322+00:00"
+}

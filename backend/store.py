@@ -14,6 +14,11 @@ from .schema import Capability
 
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 
+# NOTE: deliberately named differently from the assignment's own /evidence/
+# folder (which you curate by hand for submission). This is auto-generated,
+# per-run screenshot evidence for local debugging — see loop.py.
+RUNTIME_EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "runtime_evidence"
+
 
 def _path_for(artifact_id: str) -> Path:
     return ARTIFACTS_DIR / f"{artifact_id}.json"

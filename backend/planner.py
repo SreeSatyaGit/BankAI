@@ -29,6 +29,54 @@ from .schema import Action, Perception, StepSpec
 
 MODEL_NAME = "openai/gpt-oss-20b"
 
+# The Groq key can be provided under either name, and either a `.env` next to this
+# file (backend/.env) or the project-root `.env` (the one .env.example lives next
+# to) — checked in that order, then falling back to real process env vars.
+_ENV_CANDIDATE_PATHS = (
+    os.path.join(os.path.dirname(__file__), ".env"),  # backend/.env
+    os.path.join(os.path.dirname(__file__), "..", ".env"),  # bankai/.env (repo root)
+)
+_API_KEY_VAR_NAMES = ("bank_api_interface", "GROQ_API_KEY")
+
+
+def _load_env_file(path: str) -> Dict[str, str]:
+    """Minimal `.env` reader: `KEY = value` / `KEY=value`, `#` comments, and
+    optional surrounding single or double quotes on the value. No dependency on
+    python-dotenv."""
+    values: Dict[str, str] = {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return values
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, raw = line.partition("=")
+        name = name.strip()
+        raw = raw.strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+            raw = raw[1:-1]
+        if name:
+            values[name] = raw
+    return values
+
+
+def _resolve_api_key() -> Optional[str]:
+    # 1. Any `.env` file, backend/.env checked before the repo-root .env.
+    for path in _ENV_CANDIDATE_PATHS:
+        file_values = _load_env_file(path)
+        for var_name in _API_KEY_VAR_NAMES:
+            if file_values.get(var_name):
+                return file_values[var_name]
+    # 2. Real process environment (e.g. `export GROQ_API_KEY=...`).
+    for var_name in _API_KEY_VAR_NAMES:
+        if os.environ.get(var_name):
+            return os.environ[var_name]
+    return None
+
+
 _STEP_SPEC_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -45,7 +93,7 @@ _STEP_SPEC_SCHEMA: Dict[str, Any] = {
                     "type": ["object", "null"],
                     "description": "omit for 'navigate'; required for click/type/select/extract/press_enter",
                     "properties": {
-                        "strategy": {"type": "string", "enum": ["label", "role", "placeholder", "text"]},
+                        "strategy": {"type": "string", "enum": ["label", "role", "placeholder", "text", "name"]},
                         "value": {
                             "type": "string",
                             "description": "label text / accessible name / placeholder text / visible text",
@@ -130,9 +178,20 @@ this run.
 
 Rules:
 - Call exactly one tool per turn: `next_step` or `finish`.
-- Use ONLY semantic locators (label / role+name / placeholder / visible text) that \
-match something actually present in the current perception. Never invent a control \
-that isn't listed.
+- Use ONLY semantic locators (label / role+name / placeholder / visible text / name) \
+that match something actually present in the current perception. Never invent a \
+control that isn't listed.
+- Each field in current_perception.fields has its own "locator_strategy" — this \
+tells you EXACTLY which Locator.strategy to use for that field. Always copy it \
+directly rather than guessing "label". Many legacy forms have no real label at \
+all, and perceive() reports "name" for those — using "label" against such a \
+field will never resolve, no matter how many times you retry.
+- Entries in current_perception.buttons and current_perception.links are ALWAYS \
+targeted with strategy="role" — role="button" for buttons, role="link" for \
+links — and value equal to that entry's "name". NEVER use strategy="name" for a \
+button or link: "name" only applies to a FIELD whose own locator_strategy says \
+"name" (it refers to that input's HTML name attribute, which most buttons don't \
+even have).
 - NEVER put a literal value you need to type directly in action.value. Instead \
 invent a short snake_case param name, write "{{that_name}}" in action.value, and \
 record the literal under param_bindings on the SAME step, e.g. \
@@ -146,6 +205,43 @@ achieved, and describe that observable state in final_checkpoint.
 - Mark risky=true on any step that submits, deletes, transfers, or otherwise takes \
 an irreversible/high-impact action.
 - Keep step descriptions short and concrete.
+
+The `locator` object ALWAYS has exactly this shape — "strategy" and "value" are \
+both REQUIRED keys, spelled exactly like this, never anything else:
+  {"strategy": "label", "value": "First name"}
+  {"strategy": "role", "value": "Submit", "role": "button"}
+  {"strategy": "placeholder", "value": "Search..."}
+  {"strategy": "text", "value": "View details"}
+  {"strategy": "name", "value": "customer.firstName"}
+Do NOT write {"label": "..."} or any other key name — "strategy"/"value" are the \
+only correct keys for locator.
+
+Example of a fully correct next_step call, given a visible field labeled "First name":
+{
+  "id": "step_1",
+  "description": "Enter first name",
+  "action": {
+    "type": "type",
+    "locator": {"strategy": "label", "value": "First name"},
+    "value": "{{first_name}}"
+  },
+  "param_bindings": {"first_name": "John"},
+  "checkpoint": "first name field shows John",
+  "risky": false
+}
+
+Example of a fully correct next_step call clicking a button from
+current_perception.buttons (note strategy="role", never "name", for buttons):
+{
+  "id": "step_12",
+  "description": "Click Register button to submit the form",
+  "action": {
+    "type": "click",
+    "locator": {"strategy": "role", "role": "button", "value": "Register"}
+  },
+  "checkpoint": "page navigates away from the registration form to an account confirmation page",
+  "risky": true
+}
 """
 
 
@@ -167,11 +263,12 @@ class GroqPlanner:
     """The only class in this codebase that talks to an LLM."""
 
     def __init__(self, api_key: Optional[str] = None, model: str = MODEL_NAME):
-        key = api_key or os.environ.get("GROQ_API_KEY")
+        key = api_key or _resolve_api_key()
         if not key:
             raise RuntimeError(
-                "GROQ_API_KEY is not set. Copy .env.example to .env and fill it in, "
-                "or export it before starting the backend."
+                "No Groq API key found. Set `bank_api_interface` (or `GROQ_API_KEY`) "
+                "in a .env file (backend/.env or the repo-root bankai/.env), or export "
+                "it as a real environment variable, before starting the backend."
             )
         self._client = Groq(api_key=key)
         self._model = model
@@ -209,6 +306,9 @@ class GroqPlanner:
                 "role": "user",
                 "content": (
                     "Your previous response could not be parsed into a valid tool call. "
+                    "A common mistake: the `locator` object must have exactly the keys "
+                    "'strategy' and 'value' (e.g. {\"strategy\": \"label\", \"value\": \"First name\"}) "
+                    "— not '{\"label\": \"...\"}' or any other shape. "
                     "Call exactly one of `next_step` or `finish` with valid arguments."
                 ),
             }

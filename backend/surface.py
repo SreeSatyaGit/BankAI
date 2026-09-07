@@ -37,9 +37,15 @@ _PERCEIVE_JS = r"""
     return true;
   }
 
+  // Returns {text, strategy} — `strategy` tells the caller EXACTLY which
+  // Locator.strategy will resolve this element, since perceive() already knows
+  // (it just tried them in priority order). This removes the guesswork that
+  // used to make the planner try strategy="label" against a value that was
+  // actually just the HTML `name` attribute (legacy forms very often have no
+  // real label/aria-label/placeholder at all — only a name attribute).
   function labelFor(el) {
     const aria = el.getAttribute('aria-label');
-    if (aria) return aria.trim();
+    if (aria) return { text: aria.trim(), strategy: 'label' };
 
     const labelledBy = el.getAttribute('aria-labelledby');
     if (labelledBy) {
@@ -48,24 +54,26 @@ _PERCEIVE_JS = r"""
         .filter(Boolean)
         .map(n => n.innerText || n.textContent || '');
       const joined = parts.join(' ').trim();
-      if (joined) return joined;
+      if (joined) return { text: joined, strategy: 'label' };
     }
 
     if (el.id) {
       const lab = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-      if (lab && lab.innerText) return lab.innerText.trim();
+      if (lab && lab.innerText) return { text: lab.innerText.trim(), strategy: 'label' };
     }
 
     const parentLabel = el.closest('label');
-    if (parentLabel && parentLabel.innerText) return parentLabel.innerText.trim();
+    if (parentLabel && parentLabel.innerText) {
+      return { text: parentLabel.innerText.trim(), strategy: 'label' };
+    }
 
     const placeholder = el.getAttribute('placeholder');
-    if (placeholder) return placeholder.trim();
+    if (placeholder) return { text: placeholder.trim(), strategy: 'placeholder' };
 
     const name = el.getAttribute('name');
-    if (name) return name.trim();
+    if (name) return { text: name.trim(), strategy: 'name' };
 
-    return '';
+    return { text: '', strategy: 'label' };
   }
 
   function controlName(el) {
@@ -82,10 +90,11 @@ _PERCEIVE_JS = r"""
     const type = (el.getAttribute('type') || el.tagName).toLowerCase();
     if (['hidden', 'submit', 'button', 'image'].includes(type)) return;
     if (el.disabled) return;
-    const label = labelFor(el);
-    if (!label) return;
+    const found = labelFor(el);
+    if (!found.text) return;
     fields.push({
-      label,
+      label: found.text,
+      locator_strategy: found.strategy,
       kind: el.tagName.toLowerCase() === 'select' ? 'select'
             : el.tagName.toLowerCase() === 'textarea' ? 'textarea'
             : type,
@@ -224,4 +233,13 @@ class Surface:
             return self._page.get_by_placeholder(locator.value)
         if locator.strategy == "text":
             return self._page.get_by_text(locator.value, exact=False)
+        if locator.strategy == "name":
+            # Attribute-based match on the HTML `name` attribute — the stable
+            # hook perceive() falls back to reporting when a field has no real
+            # label/aria-label/placeholder at all (common on legacy
+            # server-rendered forms). Deliberately not a positional CSS
+            # selector: `name` is a developer-assigned identifier, closer in
+            # spirit to a semantic locator than to fragile structural CSS/xpath.
+            escaped = locator.value.replace('"', '\\"')
+            return self._page.locator(f'[name="{escaped}"]')
         return None

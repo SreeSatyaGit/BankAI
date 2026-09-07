@@ -20,12 +20,20 @@ from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-LocatorStrategy = Literal["label", "role", "placeholder", "text"]
+LocatorStrategy = Literal["label", "role", "placeholder", "text", "name"]
 ActionType = Literal["navigate", "click", "type", "select", "extract", "press_enter"]
 
 
 class Locator(BaseModel):
-    """How to find a control on the page. Semantic, not CSS/xpath."""
+    """How to find a control on the page.
+
+    Prefers real semantic signals (label / role+name / placeholder / visible
+    text), but also supports "name" — matching an element's HTML `name`
+    attribute. This isn't a CSS/xpath positional hack: it's a stable,
+    developer-assigned identifier, and it's often the ONLY stable hook legacy
+    server-rendered forms expose (see surface.py's perceive(), which reports
+    exactly which strategy will work for each field instead of guessing).
+    """
 
     strategy: LocatorStrategy
     value: str
@@ -69,6 +77,12 @@ class PerceptionField(BaseModel):
     label: str
     kind: str  # "text" | "email" | "password" | "textarea" | "select" | "checkbox" | ...
     current_value: Optional[str] = None
+    # Which Locator.strategy will actually resolve this field, decided by perceive()
+    # itself (it already knows exactly which signal it used) rather than left for
+    # the planner to guess. E.g. "label" if there's a real <label>/aria-label, or
+    # "name" if the only stable hook is the HTML name attribute (the common case
+    # on legacy server-rendered forms with no real labels at all).
+    locator_strategy: LocatorStrategy = "label"
 
 
 class PerceptionControl(BaseModel):

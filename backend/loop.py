@@ -16,16 +16,30 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from playwright.async_api import async_playwright
 
+from . import store
 from .planner import GroqPlanner, PlannerDone, PlannerStuck
 from .schema import Action, Capability, StepSpec
 from .surface import Surface
 
 MAX_STEPS = int(os.environ.get("BANKAI_MAX_STEPS", "15"))
 HEADLESS = os.environ.get("BANKAI_HEADLESS", "true").lower() != "false"
+
+# Called before executing any step with risky=True. Given {"step", "resolved_action",
+# "screenshot"} for display, returns True to proceed or False to skip the step.
+# main.py wires this to RunState.request_confirmation (a real pause on a human
+# answer); the default below auto-approves, for direct/scripted callers that don't
+# care about human-in-the-loop (e.g. tests).
+ConfirmRiskyFn = Callable[[Dict[str, Any]], Awaitable[bool]]
+
+
+async def _auto_approve(_: Dict[str, Any]) -> bool:
+    return True
+
 
 _PARAM_REF = re.compile(r"\{\{(\w+)\}\}")
 
@@ -51,10 +65,36 @@ def _strip_for_persistence(step: StepSpec) -> StepSpec:
     return step.model_copy(update={"param_bindings": {}})
 
 
-async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
+async def _capture_screenshot(page, run_dir: Path, name: str) -> Optional[str]:
+    """Best-effort screenshot for evidence. Never fails the run — a screenshot
+    that couldn't be taken (e.g. page mid-navigation) just means no visual for
+    that moment, not a broken discovery run."""
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        path = run_dir / f"{name}.png"
+        await page.screenshot(path=str(path), timeout=5000)
+        return f"/runtime_evidence/{run_dir.name}/{name}.png"
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def run_discovery(
+    target_url: str,
+    goal: str,
+    run_id: Optional[str] = None,
+    events: Optional[List[Dict[str, Any]]] = None,
+    confirm_risky: Optional[ConfirmRiskyFn] = None,
+) -> Dict[str, Any]:
     planner = GroqPlanner()
 
-    events: List[Dict[str, Any]] = []
+    run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
+    # `events` is caller-owned when provided (e.g. main.py hands in a RunState's
+    # events list so a GET /api/discover/{run_id} poll sees progress live, not
+    # just once the whole run finishes) — we only append, never replace it.
+    events = events if events is not None else []
+    confirm_risky = confirm_risky or _auto_approve
+    run_dir = store.RUNTIME_EVIDENCE_DIR / run_id
+
     history: List[Dict[str, Any]] = []
     executed_steps: List[StepSpec] = []
     params: Dict[str, str] = {}
@@ -71,9 +111,10 @@ async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
             await browser.close()
             return {
                 "ok": False,
-                "steps": [],
+                "steps": events,
                 "artifact": None,
                 "reason": f"could not load target_url: {exc}",
+                "run_id": run_id,
             }
 
         final_reason = "max steps reached"
@@ -92,14 +133,16 @@ async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
 
                 if isinstance(outcome, PlannerStuck):
                     final_reason = outcome.reason
-                    events.append({"type": "stuck", "reason": outcome.reason})
+                    screenshot = await _capture_screenshot(page, run_dir, "stuck")
+                    events.append({"type": "stuck", "reason": outcome.reason, "screenshot": screenshot})
                     break
 
                 if isinstance(outcome, PlannerDone):
                     final_reason = outcome.reason
                     final_checkpoint = outcome.final_checkpoint
                     success = True
-                    events.append({"type": "done", "reason": outcome.reason})
+                    screenshot = await _capture_screenshot(page, run_dir, "done")
+                    events.append({"type": "done", "reason": outcome.reason, "screenshot": screenshot})
                     break
 
                 step: StepSpec = outcome
@@ -118,10 +161,40 @@ async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
                     )
                     continue  # let the planner see this and course-correct or give up
 
+                if step.risky:
+                    pending_screenshot = await _capture_screenshot(page, run_dir, f"{step.id}_pending")
+                    approved = await confirm_risky(
+                        {
+                            "step": step.model_dump(),
+                            "resolved_action": resolved_action.model_dump(),
+                            "screenshot": pending_screenshot,
+                        }
+                    )
+                    if not approved:
+                        events.append(
+                            {
+                                "type": "risky_denied",
+                                "step_id": step.id,
+                                "description": step.description,
+                                "screenshot": pending_screenshot,
+                            }
+                        )
+                        history.append(
+                            {
+                                "step": step.description,
+                                "action_type": step.action.type,
+                                "result": "denied",
+                                "detail": "a human reviewer denied this risky step",
+                            }
+                        )
+                        continue  # let the planner see the denial and adapt or give up
+
                 result = await surface.act(resolved_action)
 
                 if result.ok and resolved_action.type == "extract" and resolved_action.output_name:
                     outputs[resolved_action.output_name] = result.extracted_text or ""
+
+                screenshot = await _capture_screenshot(page, run_dir, step.id)
 
                 events.append(
                     {
@@ -132,6 +205,7 @@ async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
                         "ok": result.ok,
                         "error": result.error,
                         "risky": step.risky,
+                        "screenshot": screenshot,
                     }
                 )
                 history.append(
@@ -161,8 +235,6 @@ async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
             success_checkpoint=final_checkpoint,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
-        from . import store  # local import keeps store.py's only dependency here
-
         store.save(artifact)
 
     return {
@@ -170,4 +242,5 @@ async def run_discovery(target_url: str, goal: str) -> Dict[str, Any]:
         "steps": events,
         "artifact": artifact.model_dump() if artifact else None,
         "reason": None if success else final_reason,
+        "run_id": run_id,
     }
