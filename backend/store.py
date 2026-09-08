@@ -21,10 +21,6 @@ from typing import List, Optional
 from .schema import Capability
 
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
-
-# NOTE: deliberately named differently from the assignment's own /evidence/
-# folder (which you curate by hand for submission). This is auto-generated,
-# per-run screenshot evidence for local debugging — see loop.py.
 RUNTIME_EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "runtime_evidence"
 
 _SLUG_SEPARATOR = "__"
@@ -65,7 +61,6 @@ def _path_for(artifact_id: str, goal: str = "") -> Path:
 
 def save(capability: Capability) -> Path:
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    # Drop any stale file for this id under a different slug before writing.
     existing = _find_path(capability.id)
     path = _path_for(capability.id, capability.goal)
     if existing and existing != path:

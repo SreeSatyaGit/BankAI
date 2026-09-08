@@ -24,9 +24,6 @@ from .schema import Action, Locator, Perception
 DIGEST_MAX_CHARS = 1500
 DEFAULT_TIMEOUT_MS = 8000
 
-# Single page.evaluate() call that inventories visible, interactive elements and
-# derives a best-effort accessible name/label for each — deliberately generic,
-# no assumptions about any particular site's markup.
 _PERCEIVE_JS = r"""
 () => {
   function isVisible(el) {
@@ -231,13 +228,6 @@ class Surface:
             return ActionResult(False, error=f"{type(exc).__name__}: {exc}")
 
     async def _ensure_ready(self, loc: PWLocator) -> Optional[str]:
-        """Explicit visibility wait before acting, so a timeout here produces a
-        clearly distinguishable error ("resolved but never became visible")
-        from a timeout inside the click/fill/etc itself (found, visible, but
-        e.g. the click was intercepted by an overlay). Playwright's own
-        click()/fill()/etc already auto-wait for actionability internally —
-        this exists for error-message clarity during replay/debugging, not to
-        change functional behavior."""
         try:
             await loc.wait_for(state="visible", timeout=DEFAULT_TIMEOUT_MS)
             return None
@@ -272,12 +262,6 @@ class Surface:
         if locator.strategy == "text":
             return self._page.get_by_text(locator.value, exact=False)
         if locator.strategy == "name":
-            # Attribute-based match on the HTML `name` attribute — the stable
-            # hook perceive() falls back to reporting when a field has no real
-            # label/aria-label/placeholder at all (common on legacy
-            # server-rendered forms). Deliberately not a positional CSS
-            # selector: `name` is a developer-assigned identifier, closer in
-            # spirit to a semantic locator than to fragile structural CSS/xpath.
             escaped = locator.value.replace('"', '\\"')
             return self._page.locator(f'[name="{escaped}"]')
         return None

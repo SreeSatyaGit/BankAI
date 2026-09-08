@@ -40,8 +40,6 @@ from .schema import Action, Capability, ReplayResult
 
 app = FastAPI(title="BankAI", version="0.1.0")
 
-# Serves the per-run screenshots loop.py writes to runtime_evidence/<run_id>/*.png
-# so the frontend (or you, directly) can view them at /runtime_evidence/<...>.png.
 store.RUNTIME_EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 app.mount(
     "/runtime_evidence",
@@ -49,8 +47,6 @@ app.mount(
     name="runtime_evidence",
 )
 
-# Skeleton-friendly CORS: the Vite dev server proxies /api anyway, but allow direct
-# cross-origin calls too so the frontend can be pointed at the backend directly.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,20 +77,11 @@ class RunStatusResponse(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    # "approve"/"skip" are the meaningful choices for a "risky" trigger;
-    # "retry"/"skip" for "retry_exhausted"; "continue"/"abort" for "stuck".
-    # loop.py interprets whichever it receives sensibly for the trigger that's
-    # actually pending — see its docstring. (There's no "planner_error"
-    # trigger to resolve here — that ends the run automatically, no human
-    # prompt: an API failure isn't something a human can fix on the page.)
     decision: Literal["approve", "skip", "continue", "retry", "abort"]
     note: Optional[str] = None
 
 
 class ManualActionRequest(BaseModel):
-    # Reuses the exact same Action schema the planner uses — a human manually
-    # acting on a paused live session is just submitting one more Action, not
-    # a fundamentally different kind of operation.
     action: Action
     description: Optional[str] = None
 
@@ -199,12 +186,6 @@ async def resume(run_id: str, req: ResumeRequest) -> Dict[str, bool]:
 
 @app.post("/api/discover/{run_id}/manual-action", response_model=ManualActionResponse)
 async def manual_action(run_id: str, req: ManualActionRequest) -> ManualActionResponse:
-    """Lets a human act directly on the SAME live Playwright session a paused
-    run is using — click, type, navigate, extract — without resuming the
-    agent yet. This is the actual "take control of the live session" part of
-    the handoff; `resume` is just how you hand control back afterward. Can be
-    called any number of times while paused (e.g. dismiss a popup, then check
-    the page again, then decide what to tell `resume`)."""
     run = runs.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
