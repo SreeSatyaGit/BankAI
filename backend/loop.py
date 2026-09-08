@@ -151,15 +151,9 @@ async def run_discovery(
     on_surface_ready: Optional[OnSurfaceReadyFn] = None,
     planner: Optional[GroqPlanner] = None,
 ) -> Dict[str, Any]:
-    # `planner` is injectable so tests can drive the loop with a scripted
-    # sequence of outcomes and no Groq key / network; production always lets it
-    # default to a real GroqPlanner.
     planner = planner or GroqPlanner()
 
     run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
-    # `events` is caller-owned when provided (e.g. main.py hands in a RunState's
-    # events list so a GET /api/discover/{run_id} poll sees progress live, not
-    # just once the whole run finishes) — we only append, never replace it.
     events = events if events is not None else []
     request_intervention = request_intervention or _default_intervention_handler
     run_dir = store.RUNTIME_EVIDENCE_DIR / run_id
@@ -196,12 +190,6 @@ async def run_discovery(
         try:
             for _ in range(MAX_STEPS):
                 perception = await surface.perceive()
-                # planner.next_step() is a blocking, synchronous Groq call
-                # (with its own retries/backoff). Run it off the event loop so
-                # the FastAPI server keeps answering status polls while the
-                # planner is slow or failing — otherwise a stalled/failing API
-                # call freezes uvicorn and the frontend's poll returns 500
-                # instead of the run's real ok=False + reason.
                 outcome = await asyncio.to_thread(
                     planner.next_step,
                     goal=goal,

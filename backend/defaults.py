@@ -36,11 +36,6 @@ def _random_suffix(n: int = 6) -> str:
 def generate_default(param_name: str) -> str:
     """Best-effort synthetic value for a param, guessed from its name."""
     name = param_name.lower()
-
-    # Fields that typically must be unique per registration get a random
-    # suffix each call, so repeated replays don't collide with an
-    # "already exists" business outcome unless the caller wants that
-    # (they can always pass their own value explicitly).
     if "username" in name:
         return f"testuser_{_random_suffix()}"
     if "email" in name:

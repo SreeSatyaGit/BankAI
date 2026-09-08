@@ -3,11 +3,6 @@ import { startDiscovery, getRunStatus, resumeRun, submitManualAction } from "./a
 
 const POLL_INTERVAL_MS = 1000;
 
-// Catches any render-time crash in AppContent and shows a visible message
-// instead of an unstyled blank page. Without this, a single bad response
-// shape (e.g. stale state from a Fast Refresh across a structural change)
-// unmounts the whole tree silently — the error only ever shows up in the
-// browser console, which is easy to miss.
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -49,11 +44,6 @@ export default function App() {
   );
 }
 
-// Which resume decisions make sense for each escalation trigger. "abort" is
-// always offered — everything else depends on whether there's a specific
-// pending step (risky / retry_exhausted) or not (stuck). A planner whose API
-// call itself fails is NOT an escalation — that ends the run automatically,
-// no human prompt, so it never reaches this panel.
 function resumeOptionsFor(trigger) {
   if (trigger === "risky") {
     return [
@@ -69,8 +59,6 @@ function resumeOptionsFor(trigger) {
       { decision: "abort", label: "Abort run", style: styles.denyButton },
     ];
   }
-  // "stuck" or anything unrecognized: no specific step to act on, just let
-  // the agent try again from wherever manual actions left the page, or give up.
   return [
     { decision: "continue", label: "Continue (let agent try again)", style: styles.approveButton },
     { decision: "abort", label: "Abort run", style: styles.denyButton },
@@ -454,9 +442,6 @@ function AppContent() {
   );
 }
 
-// Builds a real downloadable file client-side from the artifact JSON already
-// present in the poll response — no extra backend round trip needed. Named
-// after the artifact's own id, matching what's on disk under artifacts/.
 function downloadArtifact(artifact) {
   const blob = new Blob([JSON.stringify(artifact, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
