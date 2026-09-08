@@ -1,5 +1,9 @@
 # BankAI
 
+> **Target site:** I used [ParaBank](https://parabank.parasoft.com/parabank/index.htm)
+> (Parasoft's public demo banking site) to perform the discovery and replay operations
+> described below.
+
 A minimal, real skeleton for a computer-use agent: paste a live target URL and a
 goal in plain English, and a Python backend uses an LLM (Groq) to drive that page
 step by step until the goal is met (or it honestly gives up), recording the
