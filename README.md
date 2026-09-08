@@ -151,10 +151,6 @@ curl -s http://127.0.0.1:8000/api/artifacts | python3 -m json.tool
 ### Replay
 
 ```bash
-# Simplest possible call: no params needed at all. Any param the artifact
-# declares that you don't supply gets auto-filled with a fabricated test
-# value (see backend/defaults.py) — the response tells you exactly what was
-# used, via used_params/auto_filled_params.
 curl -s -X POST http://127.0.0.1:8000/api/replay \
   -H 'Content-Type: application/json' \
   -d '{"artifact_id": "cap_xxx"}' \
