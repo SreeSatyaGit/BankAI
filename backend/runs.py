@@ -52,10 +52,8 @@ class RunState:
     result: Optional[Dict[str, Any]] = None
     task: Optional[asyncio.Task] = None
 
-    # The live session a paused run can be manually acted on through. Set by
-    # loop.py right after it opens the browser; cleared once the run ends.
-    live_surface: Optional[Any] = None  # a surface.Surface, kept as Any to avoid an import cycle
-    live_run_dir: Optional[Any] = None  # a pathlib.Path, same reason
+    live_surface: Optional[Any] = None  
+    live_run_dir: Optional[Any] = None  
 
     _intervention_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     _intervention_decision: Optional[Dict[str, Any]] = field(default=None, repr=False)

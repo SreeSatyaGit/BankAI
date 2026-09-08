@@ -64,19 +64,7 @@ HEADLESS = os.environ.get("BANKAI_HEADLESS", "true").lower() != "false"
 MAX_STEP_ATTEMPTS = 3  # 1 initial try + up to 2 mechanical retries before escalating
 RETRY_BACKOFF_MS = 400
 
-# Called to escalate to a human: risky step, retries exhausted, or the planner
-# is stuck. (PlannerError is NOT routed through this — it's an automatic
-# terminal failure, see the module docstring.) Given an intervention payload
-# (see _build_intervention_payload), returns a decision dict:
-# {"decision": "approve"|"skip"|"continue"|"retry"|"abort", "note": Optional[str]}.
-# main.py wires this to RunState.request_intervention (a real pause on a human
-# answer); the default below is a safe, non-interactive fallback for
-# direct/scripted callers (e.g. tests) that don't wire up a human.
 RequestInterventionFn = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
-
-# Called once, right after the live Surface is created, so a caller (main.py)
-# can stash it on a RunState — that's what lets the manual-action endpoint act
-# on the SAME live session a paused run is using.
 OnSurfaceReadyFn = Callable[[Surface, Path], None]
 
 
@@ -161,8 +149,12 @@ async def run_discovery(
     events: Optional[List[Dict[str, Any]]] = None,
     request_intervention: Optional[RequestInterventionFn] = None,
     on_surface_ready: Optional[OnSurfaceReadyFn] = None,
+    planner: Optional[GroqPlanner] = None,
 ) -> Dict[str, Any]:
-    planner = GroqPlanner()
+    # `planner` is injectable so tests can drive the loop with a scripted
+    # sequence of outcomes and no Groq key / network; production always lets it
+    # default to a real GroqPlanner.
+    planner = planner or GroqPlanner()
 
     run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
     # `events` is caller-owned when provided (e.g. main.py hands in a RunState's
@@ -204,7 +196,14 @@ async def run_discovery(
         try:
             for _ in range(MAX_STEPS):
                 perception = await surface.perceive()
-                outcome = planner.next_step(
+                # planner.next_step() is a blocking, synchronous Groq call
+                # (with its own retries/backoff). Run it off the event loop so
+                # the FastAPI server keeps answering status polls while the
+                # planner is slow or failing — otherwise a stalled/failing API
+                # call freezes uvicorn and the frontend's poll returns 500
+                # instead of the run's real ok=False + reason.
+                outcome = await asyncio.to_thread(
+                    planner.next_step,
                     goal=goal,
                     param_names=sorted(params.keys()),
                     perception=perception,
@@ -228,10 +227,6 @@ async def run_discovery(
                         final_reason = decision.get("note") or outcome.reason
                         break
 
-                    # Anything else ("continue", or any other answer): a human
-                    # may have just acted on the live session to unblock
-                    # things — re-perceive and give the planner another shot
-                    # rather than treating "stuck" as automatically terminal.
                     history.append(
                         {
                             "step": "(human intervention)",
@@ -242,9 +237,6 @@ async def run_discovery(
                     continue
 
                 if isinstance(outcome, PlannerError):
-                    # NOT escalated — an API/network failure isn't something a
-                    # human can fix by acting on the page. Automatic terminal
-                    # failure, same as before.
                     error_screenshot = await capture_screenshot(page, run_dir, "planner_error")
                     events.append({"type": "planner_error", "reason": outcome.reason, "screenshot": error_screenshot})
                     final_reason = outcome.reason
@@ -260,9 +252,6 @@ async def run_discovery(
 
                 step: StepSpec = outcome
 
-                # Rename on the spot if the planner reused an id (seen on long
-                # runs) — BEFORE it's used for a screenshot filename, an event,
-                # or eventually persisted. See _dedupe_step_id's docstring.
                 deduped_id = _dedupe_step_id(step.id, used_step_ids)
                 if deduped_id != step.id:
                     events.append(
@@ -274,8 +263,6 @@ async def run_discovery(
                     )
                     step = step.model_copy(update={"id": deduped_id})
 
-                # Merge any newly-introduced param bindings, then substitute
-                # {{name}} placeholders with real values before executing.
                 params.update(step.param_bindings)
                 try:
                     resolved_action = step.action.model_copy(
@@ -317,7 +304,6 @@ async def run_discovery(
                             }
                         )
                         continue
-                    # "approve" (or anything else): fall through and execute below
 
                 result, attempts = await _execute_with_retry(surface, resolved_action, MAX_STEP_ATTEMPTS)
 
@@ -341,8 +327,6 @@ async def run_discovery(
                         final_reason = decision.get("note") or payload["reason"]
                         break
                     if verdict == "retry":
-                        # One more try — a human may have manually cleared
-                        # whatever was blocking it via the live session.
                         result, extra_attempts = await _execute_with_retry(surface, resolved_action, 1)
                         attempts += extra_attempts
                         if not result.ok:
@@ -355,8 +339,7 @@ async def run_discovery(
                                 }
                             )
                             continue
-                        # else: fall through — result.ok is now True
-                    else:  # "skip" / anything else: give up on this step, let the planner adapt
+                    else: 
                         history.append(
                             {
                                 "step": step.description,
@@ -367,8 +350,6 @@ async def run_discovery(
                         )
                         continue
 
-                # result.ok is True here — either it succeeded originally/on
-                # mechanical retry, or a human-assisted retry just succeeded.
                 if result.ok and resolved_action.type == "extract" and resolved_action.output_name:
                     outputs[resolved_action.output_name] = result.extracted_text or ""
 

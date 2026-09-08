@@ -88,14 +88,11 @@ risky/retry-exhausted) the specific step. From there you can:
 ```bash
 cd bankai
 python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate       
 pip install -r requirements.txt
 playwright install chromium
 
 cp .env.example .env                       # then edit .env and set bank_api_interface (or GROQ_API_KEY)
-# .env can live at bankai/.env (repo root, as above) or bankai/backend/.env —
-# backend/.env is checked first if both are present. A real exported env var
-# (bank_api_interface or GROQ_API_KEY) is also honored as a fallback.
 
 uvicorn backend.main:app --reload --port 8000
 BANKAI_HEADLESS=false uvicorn backend.main:app --reload --port 8000

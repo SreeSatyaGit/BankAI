@@ -72,11 +72,6 @@ from .templating import substitute
 MAX_ATTEMPTS = 3  # 1 initial try + up to 2 retries, per spec
 RETRY_BACKOFF_MS = 400  # linear backoff between attempts on the same step
 HEADLESS = os.environ.get("BANKAI_HEADLESS", "true").lower() != "false"
-
-# Heuristic checkpoint matching: how much of the checkpoint's significant
-# keywords need to appear on the final page for us to call it "verified".
-# Deliberately generous (few false negatives) rather than strict, since this
-# is a signal for a human to weigh, not a gate that blocks anything.
 _CHECKPOINT_OVERLAP_THRESHOLD = 0.4
 _STOPWORDS = {
     "the", "a", "an", "to", "of", "and", "on", "in", "is", "was", "were",
@@ -138,11 +133,6 @@ async def replay_capability(
             **kwargs,
         )
 
-    # Fill any params the caller didn't supply with fabricated test values
-    # (see defaults.py) rather than requiring every field to be typed out
-    # each time. Caller-supplied values always win — this only fills gaps.
-    # Every value actually used (supplied or generated) is reported back in
-    # used_params/auto_filled_params, so nothing here is a silent swap.
     used_params: Dict[str, str] = dict(params)
     auto_filled_params: List[str] = []
     if auto_fill_missing_params:
@@ -151,9 +141,6 @@ async def replay_capability(
                 used_params[name] = generate_default(name)
                 auto_filled_params.append(name)
 
-    # Fail fast on any STILL-missing params (only possible when auto-fill is
-    # off) — a clear, cheap hard failure before even launching a browser,
-    # rather than discovering it mid-flow on step 4.
     missing = [p for p in capability.params if p not in used_params]
     if missing:
         return _finish(
@@ -201,8 +188,6 @@ async def replay_capability(
                         update={"value": substitute(step.action.value, used_params)}
                     )
                 except KeyError as exc:
-                    # Shouldn't happen given the pre-check above (belt and
-                    # suspenders — e.g. if params was mutated between checks).
                     step_results.append(
                         ReplayStepResult(
                             step_id=step.id,
@@ -276,10 +261,6 @@ async def replay_capability(
                     )
                     break  # hard failure: stop immediately
 
-                # Check for a known business outcome after EVERY successful
-                # step, not just at the end — a mid-flow outcome (e.g. "record
-                # not found" on step 3 of 5) should stop us here, not let
-                # later steps run against a page state they never anticipated.
                 if capability.known_outcomes:
                     perception = await surface.perceive()
                     matched = _matches_known_outcome(

@@ -370,10 +370,7 @@ function AppContent() {
     <div style={styles.page}>
       <h1 style={styles.h1}>BankAI</h1>
       <p style={styles.sub}>
-        Paste a live target URL and a goal. The agent drives the real page — nothing here is canned.
-        Risky steps, a stuck agent, or a step that keeps failing all pause and hand you the live
-        session — approve, retry, skip, abort, or act on the page yourself first. If the planner's
-        API call itself fails, the run just ends.
+        Provide a live URL and a goal; the agent drives the real page. It pauses and yields the session on risky steps, dead ends, or repeated failures — approve, retry, skip, abort, or act yourself. A failed planner API call ends the run.
       </p>
 
       <label style={styles.label}>Target URL</label>

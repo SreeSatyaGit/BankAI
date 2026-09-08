@@ -1,14 +1,15 @@
 {
-  "id": "cap_5656c435b56f",
+  "id": "cap_57f3f830aa07",
   "version": 1,
-  "goal": "go ahead and create an account",
-  "target_url": "https://parabank.parasoft.com/parabank/register.htm",
+  "goal": "Create an account",
+  "target_url": "https://parabank.parasoft.com/parabank/index.htm",
   "params": [
     "address",
     "city",
     "first_name",
     "last_name",
     "password",
+    "password_confirm",
     "phone_number",
     "ssn",
     "state",
@@ -19,42 +20,24 @@
   "steps": [
     {
       "id": "step_1",
-      "description": "Enter username",
+      "description": "Click Register link to navigate to registration page",
       "action": {
-        "type": "type",
+        "type": "click",
         "locator": {
-          "strategy": "name",
-          "value": "username",
-          "role": null,
+          "strategy": "role",
+          "value": "Register",
+          "role": "link",
           "fallbacks": []
         },
-        "value": "{{username}}",
+        "value": null,
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "username field shows testuser",
+      "checkpoint": "registration page appears with registration form",
       "risky": false
     },
     {
       "id": "step_1_2",
-      "description": "Enter password",
-      "action": {
-        "type": "type",
-        "locator": {
-          "strategy": "name",
-          "value": "password",
-          "role": null,
-          "fallbacks": []
-        },
-        "value": "{{password}}",
-        "output_name": null
-      },
-      "param_bindings": {},
-      "checkpoint": "password field shows Test@1234",
-      "risky": false
-    },
-    {
-      "id": "step_3",
       "description": "Enter first name",
       "action": {
         "type": "type",
@@ -72,7 +55,7 @@
       "risky": false
     },
     {
-      "id": "step_4",
+      "id": "step_3",
       "description": "Enter last name",
       "action": {
         "type": "type",
@@ -90,8 +73,8 @@
       "risky": false
     },
     {
-      "id": "step_5",
-      "description": "Enter street address",
+      "id": "step_4",
+      "description": "Enter address",
       "action": {
         "type": "type",
         "locator": {
@@ -104,11 +87,11 @@
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "street address field shows 123 Main St",
+      "checkpoint": "address field shows 123 Main St",
       "risky": false
     },
     {
-      "id": "step_6",
+      "id": "step_4_2",
       "description": "Enter city",
       "action": {
         "type": "type",
@@ -126,7 +109,7 @@
       "risky": false
     },
     {
-      "id": "step_1_3",
+      "id": "step_6",
       "description": "Enter state",
       "action": {
         "type": "type",
@@ -144,7 +127,7 @@
       "risky": false
     },
     {
-      "id": "step_8",
+      "id": "step_1_3",
       "description": "Enter zip code",
       "action": {
         "type": "type",
@@ -162,7 +145,7 @@
       "risky": false
     },
     {
-      "id": "step_13",
+      "id": "step_1_4",
       "description": "Enter phone number",
       "action": {
         "type": "type",
@@ -176,11 +159,47 @@
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "phone number field shows 5551234567",
+      "checkpoint": "phone number field shows 555-123-4567",
       "risky": false
     },
     {
-      "id": "step_10",
+      "id": "step_1_5",
+      "description": "Enter username",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "username",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{username}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "username field shows johndoe123",
+      "risky": false
+    },
+    {
+      "id": "step_13",
+      "description": "Enter password",
+      "action": {
+        "type": "type",
+        "locator": {
+          "strategy": "name",
+          "value": "password",
+          "role": null,
+          "fallbacks": []
+        },
+        "value": "{{password}}",
+        "output_name": null
+      },
+      "param_bindings": {},
+      "checkpoint": "password field shows entered value",
+      "risky": false
+    },
+    {
+      "id": "step_1_6",
       "description": "Enter SSN",
       "action": {
         "type": "type",
@@ -212,7 +231,7 @@
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "customer.username field shows testuser",
+      "checkpoint": "customer.username field shows johndoe123",
       "risky": false
     },
     {
@@ -230,12 +249,12 @@
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "customer.password field shows password",
+      "checkpoint": "customer.password field shows Password123!",
       "risky": false
     },
     {
       "id": "step_13_4",
-      "description": "Enter password into repeatedPassword field",
+      "description": "Enter password confirmation",
       "action": {
         "type": "type",
         "locator": {
@@ -244,11 +263,11 @@
           "role": null,
           "fallbacks": []
         },
-        "value": "{{password}}",
+        "value": "{{password_confirm}}",
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "repeatedPassword field shows Test@1234",
+      "checkpoint": "repeatedPassword field shows Password123!",
       "risky": false
     },
     {
@@ -266,11 +285,11 @@
         "output_name": null
       },
       "param_bindings": {},
-      "checkpoint": "registration confirmation page appears with welcome message",
+      "checkpoint": "registration form submits and navigates to account creation confirmation page",
       "risky": true
     }
   ],
-  "success_checkpoint": "Page displays 'Your account was created successfully. You are now logged in.'",
-  "created_at": "2026-09-07T16:12:37.874016+00:00",
+  "success_checkpoint": "Account creation page confirms user is logged in",
+  "created_at": "2026-09-08T04:19:27.983784+00:00",
   "known_outcomes": {}
 }

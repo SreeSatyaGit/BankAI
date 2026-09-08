@@ -1,0 +1,5 @@
+# Dev/test dependencies. Installs the runtime deps too, since importing the
+# backend package pulls in playwright/groq/fastapi.
+-r requirements.txt
+
+pytest>=8

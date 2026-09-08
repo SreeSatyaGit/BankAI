@@ -50,11 +50,7 @@ class Action(BaseModel):
 
     type: ActionType
     locator: Optional[Locator] = None
-    # For "navigate": a URL. For "type"/"select": text to enter, may reference
-    # {{param_name}} placeholders that get substituted from param_bindings/params
-    # before execution. Not used for "click".
     value: Optional[str] = None
-    # For "extract": the name under which the extracted text is stored in outputs.
     output_name: Optional[str] = None
 
 
@@ -64,12 +60,8 @@ class StepSpec(BaseModel):
     id: str
     description: str
     action: Action
-    # Transient: {{param_name}} -> literal value used *this run* to actually drive
-    # the page. Stripped before the artifact is persisted (see loop.py).
     param_bindings: Dict[str, str] = Field(default_factory=dict)
-    # Human-readable description of the expected resulting state after this step.
     checkpoint: Optional[str] = None
-    # Marks the step as risky/irreversible (e.g. submit, delete, transfer).
     risky: bool = False
 
 
@@ -77,11 +69,6 @@ class PerceptionField(BaseModel):
     label: str
     kind: str  # "text" | "email" | "password" | "textarea" | "select" | "checkbox" | ...
     current_value: Optional[str] = None
-    # Which Locator.strategy will actually resolve this field, decided by perceive()
-    # itself (it already knows exactly which signal it used) rather than left for
-    # the planner to guess. E.g. "label" if there's a real <label>/aria-label, or
-    # "name" if the only stable hook is the HTML name attribute (the common case
-    # on legacy server-rendered forms with no real labels at all).
     locator_strategy: LocatorStrategy = "label"
 
 
