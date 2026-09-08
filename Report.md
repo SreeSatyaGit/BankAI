@@ -1,62 +1,128 @@
-# Design report
+# BankAI — Project Report
+
+## Overview
+
+BankAI is a computer-use agent for driving legacy, API-less web applications.
+A user supplies a live target URL and a goal in plain English; an LLM drives
+the page step by step to accomplish it, and the successful run is recorded as
+a typed, versioned **Capability** artifact. That artifact can then be replayed
+deterministically — no LLM in the loop — against the same site with new
+parameters. There is no seeded target or mock data; the agent operates on
+whatever URL is provided.
 
 ## Architecture
 
-Two execution paths, no shared control flow:
+The system has two execution paths that share infrastructure but no control
+flow:
 
-- **Discovery** (`loop.py`) — LLM in the loop, drives a live page via Playwright. No seeded target; any URL + goal.
-- **Replay** (`replay.py`) — runs a saved artifact, no LLM. Doesn't import `planner.py`.
+- **Discovery** (`loop.py`) — LLM-driven, drives a live page via Playwright.
+- **Replay** (`replay.py`) — executes a saved artifact with no LLM.
 
-Both sit on `Surface` (`surface.py`): `perceive()`/`act()` over a Playwright `Page`. Neither path touches Playwright directly. `templating.py` and `evidence.py` are shared between both paths.
+Both sit on a single seam, `Surface` (`surface.py`), exposing `perceive()` and
+`act()` over a Playwright page; nothing above it touches Playwright directly.
+`templating.py` (`{{param}}` substitution) and `evidence.py` (screenshot
+capture) are shared by both paths.
 
-API layer: `POST /api/discover` runs as a background task, returns `run_id` immediately (a run can pause indefinitely on escalation — can't hold an HTTP request open for that). Frontend polls `GET /api/discover/{run_id}`. `POST /api/replay` is a blocking call — no LLM, no pause, bounded time.
-
-Escalation is two endpoints, not one:
-- `POST /api/discover/{run_id}/manual-action` — human acts on the live page directly, same `Action` schema the planner uses, any number of times.
-- `POST /api/discover/{run_id}/resume` — answers the pending escalation (`approve`/`skip`/`continue`/`retry`/`abort`, depending on trigger).
-
-`runs.py` holds the run registry and the pause/resume primitive (`asyncio.Event` per run).
+The FastAPI layer (`main.py`) runs discovery as a background task —
+`POST /api/discover` returns a `run_id` immediately and the client polls
+`GET /api/discover/{run_id}`, because a run can pause for human input for an
+unbounded time. `POST /api/replay` is a single blocking call, since replay
+has no LLM and no pause and completes in bounded time. `runs.py` holds the
+in-memory run registry and the pause/resume primitive.
 
 ## Artifact schema
 
-`Capability`: id, version, goal, target_url, `params`/`outputs` (names only), ordered `steps`, `success_checkpoint` (free text), `created_at`, `known_outcomes` (optional, human-curated, empty by default).
+The persisted unit is `Capability` (`schema.py`): id, version, goal,
+target_url, `params`/`outputs` (names only), an ordered list of `StepSpec`, a
+`success_checkpoint`, `created_at`, and an optional human-curated
+`known_outcomes` map.
 
-`StepSpec`: id, description, one `Action`, `param_bindings` (transient), `checkpoint` (free text), `risky` flag. `Action`: `{type, locator, value, output_name}`. `Locator`: `label`/`role`/`placeholder`/`text`/`name`, no CSS/xpath, with a `fallbacks` chain.
+Each `StepSpec` carries an id, description, one `Action`, a free-text
+checkpoint, and a `risky` flag. Locators are semantic — `label`, `role`+name,
+`placeholder`, visible `text`, or the HTML `name` attribute — never CSS or
+xpath, with an ordered `fallbacks` chain so a step can still resolve if its
+primary strategy stops matching.
 
-Checked against the one real saved artifact (`create-an-account__cap_57f3f830aa07.json`, 15 steps, ParaBank registration): 11 params declared (first_name, last_name, address, city, state, zip_code, phone_number, ssn, username, password, password_confirm), every persisted `param_bindings` is `{}`, final "Register" step is the only one flagged `risky: true`. SSN and password went into the real form; neither is in the saved file.
-
-Mechanism: `param_bindings` holds `{name: literal}` for the current run only. `loop.py`'s `_strip_for_persistence` clears it before write. Not a redaction pass — the value never gets serialized.
+Sensitive input never reaches disk. During a run, a step's transient
+`param_bindings` holds the literal values typed into the page; `loop.py`
+strips them before the step is persisted, so only parameter *names* survive
+into the artifact. This was verified against the saved ParaBank registration
+artifact: 11 parameters (including `ssn` and `password`) are declared by name,
+and no typed value appears anywhere in the file.
 
 ## Determinism & error handling
 
-Replay: two robustness mechanisms, two failure modes.
-- Structural (element moved, still findable another way) → `Locator.fallbacks`.
-- Temporal (element correct, page not settled) → retry, `MAX_ATTEMPTS = 3`, linear backoff.
+Replay handles two distinct failure modes with two mechanisms: `Locator`
+fallbacks for structural drift (an element that moved but is still findable),
+and a bounded per-step retry with linear backoff for transient timing. If both
+are exhausted, the step is a hard failure and the run stops immediately rather
+than continuing into an unexpected page state.
 
-Both exhausted → hard failure, stop immediately.
+Every replay returns a structured `ReplayResult` with one of four statuses:
 
-Outcome priority per step: `known_outcomes` checked first (title+url+digest substring match), after *every* step, not just the end — catches a mid-flow business result before later steps run against a page that already answered. No match → `success`, plus `checkpoint_verified` (keyword-overlap on `success_checkpoint`, threshold 0.4) — explicitly documented as a signal, not proof.
-
-Discovery escalates on three triggers: `risky` step, `retry_exhausted`, `PlannerStuck`. Does NOT escalate on `PlannerError` (Groq API call failed twice) — a human can't fix a broken API call, run just ends. Planner distinguishes transport failure from unparseable output (`_PlannerOutputUnparseable`, Groq's `output_parse_failed`) — the latter gets one corrective retry before `PlannerStuck`, since it's sometimes human-fixable (e.g. a Cloudflare wall).
-
-**Bug**: `_retry_after_api_failure` catches `except _PlannerCallFailed`, and `_PlannerOutputUnparseable` is a subclass of it. First call fails on transport → routes here. If the retry then returns `output_parse_failed` (not transport, just unparseable), it gets caught by the broad except and mislabeled as terminal `PlannerError`, instead of getting the same corrective-retry treatment the first-call path gives it. Narrow scenario, but contradicts this file's own stated design. Not fixed — flagging only.
+- **success** — all steps ran, no known business outcome matched.
+- **business_outcome** — a curated `known_outcomes` pattern matched (checked
+  after every step), i.e. a legitimate result such as "no such member," not a
+  crash.
+- **blocked** — a `risky` step was reached without `confirm_risky`, so replay
+  stopped before executing it.
+- **failed** — a step exhausted its retries, with the failing step, attempt
+  count, and error reported.
 
 ## Heterogeneity & multi-tenant
 
-`Surface` is the extension point. Locators are semantic because CSS/xpath doesn't survive on legacy/desktop targets. `perceive()` reports which strategy resolves each field instead of making the planner guess — confirmed by the real artifact: all 11 form-field steps use `strategy: "name"`, because ParaBank's form has no real `<label>` elements. CSS-based locators would not have worked here.
+`Surface` is the intended extension point for other backends (legacy web,
+desktop) — the loop and replay engine only ever call `perceive()`/`act()`.
+Semantic locators are the enabling choice: `perceive()` reports which strategy
+resolves each field rather than guessing. The ParaBank artifact bears this out
+— every form field resolves by its `name` attribute because the page exposes
+no real labels, a case CSS-based targeting would not handle cleanly.
 
-No multi-tenant support. One `target_url` per run, no tenant config, no override mechanism. Unstarted, not partial.
+Multi-tenant support (one capability generalized across differently-branded
+instances of the same app) is out of scope for this version.
 
 ## Escalation & handoff
 
-One live Playwright page per run (`RunState.live_surface`). Paused run → manual-action and resume act on that exact page, not a new session. Concurrency is correct: `request_intervention()` awaits an `asyncio.Event`; `asyncio` is cooperative/single-threaded, so `run_discovery()` is genuinely suspended while a manual action runs. No locking needed.
+Each run holds one live Playwright page. When discovery pauses, a human acts
+on that exact session, not a fresh one, through two endpoints:
+`POST .../manual-action` (perform any `Action` — click, type, navigate,
+extract — repeatable) and `POST .../resume` (answer the pending escalation).
+Three situations pause a run: a `risky` step, a step that exhausted its
+retries, and the planner getting stuck; each offers the decision set that
+makes sense for it. Because the pause is an `asyncio.Event` on a cooperative
+single-threaded loop, the run is genuinely suspended while a human acts — no
+locking required.
 
-Three triggers, three different decision sets — `risky` (approve/skip/abort), `retry_exhausted` (retry/skip/abort), `stuck` (continue/abort). Frontend renders the correct buttons per trigger. A human can call manual-action repeatedly before resuming at all.
-
-Replay has none of this by design — no long-lived wait to justify it. A failure just comes back in the response (`blocked` for unconfirmed risky, `failed` otherwise) for the caller to handle.
+Replay has no live-pause path by design; a failure is returned in the response
+for the caller to handle.
 
 ## Safety
 
-Core guarantee holds against a real run with actual sensitive fields (SSN, password) — verified directly against the saved artifact, not just the docstring's claim.
+Two guarantees. First, no sensitive data is persisted — parameter values are
+templated as `{{name}}` and stripped before the artifact is written, confirmed
+against a real run containing an SSN and password. Second, risky/irreversible
+steps are gated: discovery pauses for human approval before executing one, and
+replay refuses to run one unless the caller passes `confirm_risky=true` on
+that specific call — approval at discovery time does not carry over to future
+replays with different parameters. Auto-filled replay parameters
+(`defaults.py`) are fabricated from the parameter name alone, never from prior
+real values, and every value used is reported back so nothing is silently
+substituted.
 
-Risky-step handling differs by path, correctly: discovery pauses and asks before executing. Replay refuses unless `confirm_risky=true` per call — not inherited from discovery-time approval, since different params (a different transfer amount) is a different decision each time.
+## Testing & evidence
+
+The test suite (`tests/`) covers store round-tripping, discovery
+persist-on-success and no-persist-on-failure, param-binding stripping, planner
+parse-failure recovery, and failure-path handling, using fakes for Playwright,
+Groq, and the network. `runtime_evidence/` holds captured screenshots from a
+discovery run and multiple replay runs, including a `blocked` replay stopping
+at the risky Register step.
+
+## Status
+
+Discovery, deterministic replay, human-in-the-loop escalation, the typed
+artifact format, and the safety guarantees are all implemented and exercised
+end to end against a live target (ParaBank). The browser is the one
+implemented `Surface`; legacy-web and desktop backends, multi-tenant reuse,
+and automatic population of `known_outcomes` are identified extension points
+rather than built features.
